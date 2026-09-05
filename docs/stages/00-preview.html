@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pratinjau — Laporan Harian</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.6 system-ui, sans-serif; background: #f1f5f9; color: #0f172a; }
+    body:has(#dark:checked) { background: #0b1120; color: #e2e8f0; color-scheme: dark; }
+    .app { --bg: #f8fafc; --card: #fff; --text: #0f172a; --muted: #475569; --border: #cbd5e1; --accent: #1d4ed8; --soft: #eff6ff; --error: #b91c1c; --on-accent: #fff; background: var(--bg); color: var(--text); min-height: 100vh; }
+    body:has(#dark:checked) .app { --bg: #0b1120; --card: #111c2e; --text: #e2e8f0; --muted: #b6c3d6; --border: #45536b; --accent: #93c5fd; --soft: #192a45; --error: #fca5a5; --on-accent: #0b1120; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(25px, 4vw, 34px); letter-spacing: -.04em; line-height: 1.2; }
+    h2 { font-size: 19px; letter-spacing: -.02em; }
+    h3 { font-size: 16px; }
+    button, input, textarea, select { font: inherit; }
+    button, select, input[type=date] { min-height: 44px; }
+    input[type=checkbox], input[type=radio] { accent-color: var(--accent, #1d4ed8); }
+    textarea, select, input[type=date], input[type=text] { width: 100%; padding: 10px 12px; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 9px; }
+    textarea { min-height: 90px; resize: vertical; }
+    :focus-visible { outline: 3px solid #3b82f6; outline-offset: 3px; }
+    .preview-bar { padding: 10px max(16px, calc((100vw - 1080px) / 2)); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; border-bottom: 1px solid #94a3b8; }
+    .preview-bar span { margin-right: auto; }
+    .preview-bar label { cursor: pointer; display: inline-flex; align-items: center; min-height: 44px; gap: 6px; }
+    .container { max-width: 1080px; margin: auto; padding: 24px 16px 48px; }
+    header { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: 20px; margin-bottom: 24px; }
+    .eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--accent); margin-bottom: 7px; }
+    .muted, small { color: var(--muted); }
+    .account { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .avatar { display: grid; place-items: center; width: 42px; height: 42px; background: var(--soft); color: var(--accent); border-radius: 50%; font-weight: 700; }
+    .view-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; padding: 5px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); width: fit-content; }
+    .view-controls label { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; min-height: 44px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .view-controls label:has(input:checked) { background: var(--soft); color: var(--accent); }
+    .screen { display: none; }
+    .app:has(#input-view:checked) #input-screen, .app:has(#history-view:checked) #history-screen, .app:has(#dashboard-view:checked) #dashboard-screen { display: block; }
+    .section { margin-top: 28px; }
+    .section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+    .stack { display: grid; gap: 14px; }
+    .card { padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); overflow-wrap: anywhere; }
+    .task:has(.task-check:checked) { border-color: var(--accent); }
+    .check-label { display: flex; gap: 12px; align-items: start; min-height: 44px; cursor: pointer; }
+    .check-label input { width: 21px; height: 21px; margin: 5px 0 0; flex-shrink: 0; }
+    .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 7px; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 3px 8px; background: var(--soft); color: var(--accent); border-radius: 6px; }
+    .badge-neutral { color: var(--muted); background: var(--bg); border: 1px solid var(--border); }
+    .fields { display: grid; gap: 14px; padding-top: 16px; margin-top: 12px; border-top: 1px solid var(--border); }
+    .task:not(:has(.task-check:checked)) .fields { display: none; }
+    .field { display: grid; gap: 5px; font-size: 13px; font-weight: 600; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    button, .action { border: 1px solid var(--border); color: var(--text); background: var(--card); border-radius: 9px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    .primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); width: 100%; }
+    .primary:disabled { cursor: default; opacity: .65; }
+    details > summary { cursor: pointer; padding: 10px 0; min-height: 44px; font-weight: 600; }
+    details[open] > summary { margin-bottom: 8px; }
+    .quick-add { border-style: dashed; }
+    .quick-add > summary { color: var(--accent); }
+    .leave-fields, .closing-field { display: none; }
+    .leave:has(#leave-toggle:checked) .leave-fields, .closing:has(input:checked) .closing-field { display: grid; gap: 10px; margin-top: 12px; }
+    #input-screen:has(#leave-toggle:checked) #plan { display: none; }
+    .filters { display: grid; gap: 14px; margin: 18px 0; }
+    .notice { padding: 12px 14px; border-radius: 10px; background: var(--soft); border: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+    .error { color: var(--error); }
+    .empty { padding: 28px 18px; text-align: center; }
+    .empty p { margin: 5px 0 14px; }
+    .metric { font-size: 27px; font-weight: 700; color: var(--accent); }
+    .state-guide { margin-top: 38px; padding-top: 18px; border-top: 1px solid var(--border); }
+    .state-guide .card { margin-top: 12px; }
+    .history-log { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+    .file { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+    @media (min-width: 760px) {
+      .container { padding: 40px 32px 64px; }
+      .filters { grid-template-columns: repeat(3, 1fr); }
+      .dashboard-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: start; }
+      #input-screen { max-width: 800px; }
+      .card { padding: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-bar" aria-label="Pengaturan pratinjau">
+    <span>Stage 0 · pratinjau desain, data contoh tidak disimpan</span>
+    <label><input id="light" type="radio" name="theme" checked> Light</label>
+    <label><input id="dark" type="radio" name="theme"> Dark</label>
+  </div>
+  <div class="app">
+    <main class="container">
+      <header>
+        <div><p class="eyebrow">Ruang kerja tim</p><h1>Laporan Harian</h1><p class="muted">Catat progres, lanjutkan pekerjaan.</p></div>
+        <div class="account"><span class="avatar" aria-hidden="true">MK</span><div><strong>Malik</strong><br><span class="muted">Tenaga ahli</span></div></div>
+      </header>
+      <div class="view-controls" role="group" aria-label="Layar yang dipratinjau, bukan pergantian hak akses">
+        <label><input id="input-view" type="radio" name="view" checked> Input harian</label>
+        <label><input id="history-view" type="radio" name="view"> Riwayat</label>
+        <label><input id="dashboard-view" type="radio" name="view"> Rekap atasan</label>
+      </div>
+
+      <section id="input-screen" class="screen" aria-label="Input harian">
+        <div class="card"><label class="field" for="report-date">Tanggal laporan<input id="report-date" type="date" value="2026-09-07"></label><p class="muted">Contoh kalender: realisasi Jumat, 4 September; rencana Senin, 7 September.</p></div>
+        <section class="section">
+          <div class="section-heading"><div><h2>Realisasi kemarin</h2><p class="muted">Centang pekerjaan yang dikerjakan pada 4 September.</p></div></div>
+          <div class="stack">
+            <article class="card task">
+              <label class="check-label"><input class="task-check" type="checkbox" checked><span><span class="badges"><span class="badge">E-OFFICE</span><span class="badge badge-neutral">#180</span></span><strong>Perbaikan detail perbal Kepala PD</strong></span></label>
+              <div class="fields">
+                <label class="field" for="result">Hasil pekerjaan (wajib)<textarea id="result" required>Perbaikan detail perbal selesai dan sudah diperiksa.</textarea></label>
+                <details><summary>Tambah kendala</summary><label class="field" for="obstacle">Deskripsi kendala<textarea id="obstacle" placeholder="Ceritakan kendala pada pekerjaan ini"></textarea></label></details>
+                <details><summary>Tambah lampiran</summary><label class="field" for="attachment">Screenshot bukti pekerjaan<input id="attachment" type="file" accept="image/png,image/jpeg" multiple></label><small>JPG/PNG · maksimal 5 file, masing-masing 5 MB. Batas diperiksa saat aplikasi dibangun.</small></details>
+                <div class="closing"><label class="check-label"><input id="close-task" type="checkbox"><span>Tandai task selesai</span></label><label class="field closing-field" for="closing-note">Deskripsi penutupan (opsional)<textarea id="closing-note" placeholder="Catatan tambahan saat menutup task"></textarea></label></div>
+              </div>
+            </article>
+            <article class="card task">
+              <label class="check-label"><input class="task-check" type="checkbox"><span><span class="badges"><span class="badge">E-OFFICE</span></span><strong>Dukungan beberapa template naskah dinas</strong></span></label>
+              <div class="fields"><label class="field" for="result-two">Hasil pekerjaan (wajib)<textarea id="result-two" required placeholder="Apa yang sudah dikerjakan?"></textarea></label></div>
+            </article>
+          </div>
+        </section>
+        <section class="section">
+          <h2>Kerjaan tambahan kemarin</h2><p class="muted">Di luar rencana, tetap tercatat pada tanggal pekerjaan.</p>
+          <details class="card quick-add"><summary>Tambah kerjaan</summary><div class="stack">
+            <label class="field" for="extra-project">Project<select id="extra-project"><option>E-Office</option></select></label>
+            <label class="field" for="extra-task">Task<select id="extra-task"><option>Buat task baru</option> <option>Perbaikan detail perbal Kepala PD</option></select></label>
+            <label class="field" for="extra-description">Deskripsi task baru<input id="extra-description" type="text" placeholder="Pekerjaan yang dilakukan"></label>
+            <label class="field" for="extra-result">Hasil pekerjaan<textarea id="extra-result"></textarea></label>
+          </div></details>
+        </section>
+        <section class="section card leave">
+          <label class="check-label"><input id="leave-toggle" type="checkbox"><span><strong>Izin / tidak masuk tanggal laporan</strong><br><small>Realisasi tanggal sebelumnya tetap bisa diisi.</small></span></label>
+          <div class="leave-fields"><label class="field" for="leave-type">Jenis<select id="leave-type"><option>Cuti</option><option>Sakit</option><option>Izin</option></select></label><label class="field" for="leave-reason">Alasan (opsional)<textarea id="leave-reason"></textarea></label></div>
+        </section>
+        <section id="plan" class="section">
+          <h2>Rencana hari ini</h2><p class="muted">Opsional. Pilih pekerjaan yang ingin dilanjutkan.</p>
+          <details class="card quick-add"><summary>Tambah rencana</summary><div class="stack"><label class="field" for="plan-project">Project<select id="plan-project"><option>E-Office</option></select></label><label class="field" for="plan-task">Task<select id="plan-task"><option>Dukungan beberapa template naskah dinas</option><option>Buat task baru</option></select></label><label class="field" for="plan-note">Catatan rencana<textarea id="plan-note"></textarea></label></div></details>
+        </section>
+        <div class="section"><button class="primary" type="button" disabled>Simpan laporan</button><p class="muted">Penyimpanan belum tersedia pada pratinjau desain.</p></div>
+      </section>
+
+      <section id="history-screen" class="screen" aria-label="Riwayat laporan">
+        <h2>Riwayat laporan</h2><p class="muted">Lihat kembali pekerjaan berdasarkan tanggal pelaksanaannya.</p>
+        <div class="filters"><label class="field" for="history-month">Bulan<select id="history-month"><option>September 2026</option></select></label><label class="field" for="history-project">Project<select id="history-project"><option>Semua project</option><option>E-Office</option></select></label></div>
+        <div class="stack">
+          <details class="card" open><summary>Jumat, 4 September 2026 · 1 realisasi</summary><div class="badges"><span class="badge">E-OFFICE</span><span class="badge badge-neutral">Realisasi</span></div><h3>Perbaikan detail perbal Kepala PD</h3><p>Perbaikan detail perbal selesai dan sudah diperiksa.</p><div class="history-log"><p class="muted">Lampiran</p><div class="file"><span>hasil-perbaikan.png</span><span class="muted">Contoh lampiran</span></div></div></details>
+          <details class="card"><summary>Kamis, 3 September 2026 · Izin</summary><p><strong>Sakit</strong></p><p class="muted">Istirahat di rumah.</p></details>
+        </div>
+        <p class="notice section">Ekspor Word tersedia setelah template untuk tipe programmer ditentukan pada Stage 7.</p>
+      </section>
+
+      <section id="dashboard-screen" class="screen" aria-label="Rekap atasan">
+        <h2>Rekap tim</h2><p class="muted">Atasan melihat tim melalui supervisi. Supervisi hanya melihat tenaga ahli di bawahnya.</p>
+        <div class="filters"><label class="field" for="team-period">Periode<select id="team-period"><option>September 2026</option></select></label><label class="field" for="team-supervisor">Supervisi<select id="team-supervisor"><option>Semua supervisi dalam cakupan</option><option>Rina</option></select></label><label class="field" for="team-person">Tenaga ahli<select id="team-person"><option>Semua tenaga ahli dalam cakupan</option><option>Malik</option></select></label></div>
+        <div class="dashboard-grid">
+          <section class="stack"><h3>Aktivitas tim</h3><article class="card"><div class="badges"><span class="badge">E-OFFICE</span><span class="badge badge-neutral">4 Sep 2026</span></div><h3>Malik</h3><small>Supervisi: Rina</small><p>Perbaikan detail perbal Kepala PD.</p><details><summary>Lihat hasil</summary><p>Perbaikan detail selesai dan sudah diperiksa.</p></details></article></section>
+          <section class="stack"><h3>Task tanpa realisasi</h3><article class="card"><span class="badge badge-neutral">Masih open</span><h3>Dukungan beberapa template naskah</h3><p class="metric">5 hari kerja</p><p class="muted">Sejak realisasi terakhir. Rencana baru tidak mereset hitungan.</p><small>Nilai ilustrasi, belum dihitung dari database.</small></article></section>
+        </div>
+      </section>
+
+      <details class="state-guide"><summary>Referensi keadaan kosong, loading, dan error</summary>
+        <div class="card empty"><h3>Belum ada rencana sebelumnya</h3><p class="muted">Mulai dengan pekerjaan yang sudah dilakukan.</p><button type="button" disabled>Tambah kerjaan kemarin (manual)</button></div>
+        <div class="card"><p role="status">Memuat laporan…</p><p class="muted">Daftar kosong belum ditampilkan sebelum pemuatan selesai.</p></div>
+        <div class="card"><h3 class="error">Kalender belum lengkap</h3><p>Kalender pada tanggal yang diperlukan belum tersedia. Hubungi admin untuk melengkapinya sebelum menyimpan laporan.</p></div>
+        <div class="card"><label class="field" for="invalid-result">Hasil pekerjaan<textarea id="invalid-result" aria-invalid="true" aria-describedby="result-error"></textarea></label><p id="result-error" class="error">Isi hasil pekerjaan untuk task yang dicentang.</p></div>
+        <div class="card"><h3 class="error">Laporan belum berhasil disimpan</h3><p>Input tetap tersedia. Periksa koneksi dan coba kembali.</p><button type="button" disabled>Coba lagi</button></div>
+      </details>
+    </main>
+  </div>
+</body>
+</html>

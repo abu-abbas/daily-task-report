@@ -14,4 +14,4 @@ Checklist realisasi mengambil rencana milik user aktif pada hari kerja sebelumny
 
 ## Konsekuensi
 
-Contoh: jika Senin hari kerja dan Sabtu/Minggu libur, laporan Senin mengacu ke Jumat. Jika Jumat juga ditandai libur, lanjut ke hari kerja sebelumnya. Kalender yang sama dipakai untuk indikator task nyangkut. Perlakuan cuti pribadi, tanggal kalender yang belum terisi, timezone, dan lintas bulan/tahun masih dirinci pada Q-01.
+Contoh: jika Senin hari kerja dan Sabtu/Minggu libur, laporan Senin mengacu ke Jumat. Jika Jumat juga ditandai libur, lanjut ke hari kerja sebelumnya. Kalender yang sama dipakai untuk indikator task nyangkut. Tanggal kosong menahan submit sesuai [ADR-0028](0028-pengelolaan-kalender.md); pengecualian awal bulan mengikuti [ADR-0030](0030-pengecualian-awal-bulan.md). [ADR-0032](0032-tanggal-bisnis.md) menetapkan Asia/Jakarta, cuti pribadi tetap terpisah, dan perubahan kalender tidak memindahkan tanggal log yang sudah ada.

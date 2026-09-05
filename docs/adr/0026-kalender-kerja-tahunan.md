@@ -14,4 +14,4 @@ Tambahkan tabel kalender kerja tahunan sebagai sumber status hari kerja/libur pe
 
 ## Konsekuensi
 
-Kebutuhan tabel baru telah disetujui pengguna. Usulan struktur minimum: tanggal unik, penanda hari kerja/libur, dan keterangan opsional; nama tabel/kolom serta DDL belum ditetapkan. Pengelolaan kalender masuk Stage 2 sebelum input harian. Hindari asumsi akhir pekan sebagai satu-satunya libur. Pengisian awal, kewenangan pengelola, perlakuan tanggal kosong, dan pengaruh perubahan kalender pada histori perlu dirinci di Q-01. Tidak mengasumsikan integrasi API libur eksternal.
+Kebutuhan tabel baru telah disetujui pengguna. Usulan struktur minimum: tanggal unik, penanda hari kerja/libur, dan keterangan opsional; nama tabel/kolom serta DDL belum ditetapkan. Pengelolaan kalender masuk Stage 2 sebelum input harian. [ADR-0028](0028-pengelolaan-kalender.md) menetapkan kalender bersama oleh admin, pola awal mingguan yang dapat diubah, dan blok submit saat kalender belum tersedia. Pengaruh perubahan kalender pada histori masih perlu dirinci di Q-01. Tidak mengasumsikan integrasi API libur eksternal.

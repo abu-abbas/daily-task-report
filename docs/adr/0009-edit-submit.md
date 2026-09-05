@@ -14,4 +14,4 @@ Laporan boleh diedit selama bulan berjalan. Submit ulang memperbarui data yang s
 
 ## Konsekuensi
 
-Simpan perubahan terkait secara atomik dan gunakan identitas data yang stabil. Makna menghapus item yang sebelumnya tersimpan, duplikasi item dalam hari yang sama, dan batas bulan perlu dirinci; lihat Q-01 dan Q-05. Tidak ada approval atasan.
+Simpan perubahan terkait secara atomik dan gunakan identitas data yang stabil. Makna menghapus item yang sebelumnya tersimpan dan duplikasi item dalam hari yang sama masih dirinci pada Q-05. Pengecualian edit realisasi saat awal bulan mengikuti [ADR-0030](0030-pengecualian-awal-bulan.md); timezone mengikuti Q-01. Tidak ada approval atasan.

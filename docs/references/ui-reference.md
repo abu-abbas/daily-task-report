@@ -24,4 +24,4 @@ Sumber: gambar "Laporan Harian" yang dilampirkan pengguna pada percakapan 5 Sept
 - Deskripsi penutupan opsional berbeda dari catatan hasil realisasi yang wajib.
 - Gambar tidak memperlihatkan semua state. Rancangan tetap harus mencakup cold start, item dicentang, catatan wajib, kendala, upload, edit, validasi, dan kedua tema.
 
-Belum ada mockup baru atau implementasi UI. Lihat [Stage 0](../stages/00-keputusan-desain.md).
+Adaptasi tersedia sebagai [wireframe](../stages/00-review.md) dan [preview browser](../stages/00-preview.html). Preview belum merupakan aplikasi fungsional. Hasil pemeriksaan ada pada [Stage 0](../stages/00-keputusan-desain.md).

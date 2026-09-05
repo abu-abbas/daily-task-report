@@ -9,7 +9,7 @@
 - Sediakan pengelolaan user, project, dan keanggotaan oleh admin.
 - Siapkan data contoh secukupnya untuk menguji satu user dengan beberapa project dan satu project dengan beberapa user.
 - Filter pilihan project berdasarkan keanggotaan; periksa kembali pada backend.
-- Sediakan tabel dan pengelolaan kalender kerja tahunan: tanggal hari kerja/libur serta keterangan; jelaskan DDL minimum sebelum migration. Kewenangan pengelola mengikuti keputusan Q-01.
+- Sediakan tabel dan pengelolaan kalender kerja tahunan oleh admin: tanggal hari kerja/libur serta keterangan, dengan pola awal mingguan yang dapat diubah sesuai [ADR-0028](../adr/0028-pengelolaan-kalender.md). Jelaskan DDL minimum sebelum migration.
 
 ## Kriteria selesai dan pemeriksaan
 

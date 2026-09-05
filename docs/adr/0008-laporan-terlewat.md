@@ -14,4 +14,4 @@ User dapat memilih tanggal laporan yang terlewat dalam bulan berjalan.
 
 ## Konsekuensi
 
-Tidak ada izin umum untuk backdate tanpa batas. Definisi bulan berjalan dan penanganan realisasi bulan sebelumnya saat awal bulan perlu diselesaikan bersama aturan tanggal dan edit; lihat Q-01.
+Tidak ada izin umum untuk backdate tanpa batas. Pengecualian realisasi hari kerja terakhir bulan sebelumnya pada hari kerja pertama bulan baru telah diterima melalui [ADR-0030](0030-pengecualian-awal-bulan.md). Timezone bisnis masih dirinci pada Q-01.

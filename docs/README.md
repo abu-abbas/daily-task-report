@@ -1,6 +1,12 @@
 # Laporan Harian Tenaga Ahli — keputusan dan tahapan
 
-Dokumen ini mencatat spec dan keputusan percakapan pada 5 September 2026. Pekerjaan saat ini hanya dokumentasi; aplikasi belum diimplementasikan.
+Dokumen ini mencatat spec dan keputusan percakapan pada 5 September 2026. Dokumentasi dan tooling commit tersedia; aplikasi belum diimplementasikan.
+
+Gunakan [checklist pekerjaan](TODO.md) sebagai panduan progres dan urutan langkah berikutnya.
+
+[Buka preview Stage 0](stages/00-preview.html) di browser untuk memeriksa Input Harian, Riwayat, dan Rekap dalam light/dark mode. Preview menggunakan data contoh dan belum menyimpan laporan.
+
+Referensi pengguna: [spec awal](references/spec-original.md), [tampilan input harian](references/ui-reference.md), dan [pengaturan rentang libur](references/holiday-settings.md).
 
 ## Cara membaca
 
@@ -12,11 +18,11 @@ Dokumen ini mencatat spec dan keputusan percakapan pada 5 September 2026. Pekerj
 
 ## Ringkasan yang dikunci
 
-Bun + Vue 3 + Vite + TypeScript, SQLite, login email/password, peran tenaga ahli/atasan/admin, shadcn-vue + Tailwind, tampilan minimalis mobile-first, light/dark mode, dan operasi lokal dahulu. Task tanpa pemilik permanen; realisasi bertanggal pekerjaan. Penutupan eksplisit memiliki deskripsi opsional. Kalender kerja tahunan menentukan hari kerja sebelumnya dan indikator nyangkut. Word memakai template berbeda per tipe programmer; file template menyusul.
+Bun + Vue 3 + Vite + TypeScript, SQLite, login email/password, akun dengan rangkap peran tenaga ahli/supervisi/atasan/admin, shadcn-vue + Tailwind, tampilan minimalis mobile-first, light/dark mode, dan operasi lokal dahulu. Hierarki atasan → supervisi → tenaga ahli menentukan akses histori melalui hubungan aktif. Tanggal bisnis memakai Asia/Jakarta. Task tanpa pemilik permanen; realisasi bertanggal pekerjaan. Penutupan eksplisit memiliki deskripsi opsional. Kalender kerja tahunan menentukan hari kerja sebelumnya dan indikator nyangkut. Word memakai template berbeda per tipe programmer; file template menyusul.
 
 ## Indeks keputusan
 
-ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empat keputusan frontend. ADR-0025 dan ADR-0026 mencatat instruksi tambahan.
+ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empat keputusan frontend. ADR-0025 dan seterusnya mencatat instruksi tambahan.
 
 | ADR | Keputusan |
 | --- | --- |
@@ -46,6 +52,17 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0024 | [Light mode dan dark mode](adr/0024-tema.md) |
 | 0025 | [Ponytail wajib digunakan](adr/0025-metode-ponytail.md) |
 | 0026 | [Tabel kalender kerja tahunan](adr/0026-kalender-kerja-tahunan.md) |
+| 0027 | [Hook Conventional Commits](adr/0027-hook-conventional-commits.md) |
+| 0028 | [Pengelolaan kalender bersama dan tanggal kosong](adr/0028-pengelolaan-kalender.md) |
+| 0029 | [Cakupan atasan langsung — digantikan ADR-0031](adr/0029-atasan-langsung.md) |
+| 0030 | [Pengecualian realisasi pada awal bulan](adr/0030-pengecualian-awal-bulan.md) |
+| 0031 | [Hierarki atasan, supervisi, dan tenaga ahli](adr/0031-hierarki-supervisi.md) |
+| 0032 | [Timezone, cuti pribadi, dan tanggal histori](adr/0032-tanggal-bisnis.md) |
+| 0033 | [Satu akun dapat merangkap peran](adr/0033-rangkap-peran.md) |
+| 0034 | [Akses histori mengikuti hubungan aktif](adr/0034-akses-histori.md) |
+| 0035 | [Bun native tanpa framework/ORM](adr/0035-backend-framework.md) |
+| 0036 | [Skema fisik minimum Stage 1](adr/0036-skema-fisik-stage1.md) |
+| 0037 | [vee-validate+zod, TanStack Query, TanStack Table](adr/0037-library-frontend-tambahan.md) |
 
 ## Tahapan pekerjaan
 
@@ -53,8 +70,8 @@ Setiap stage menggabungkan UI, backend, dan pemeriksaan yang relevan. Status dan
 
 | Stage | Cakupan | Status awal |
 | --- | --- | --- |
-| 00 | [Keputusan dan desain layar](stages/00-keputusan-desain.md) | Dokumentasi tersedia; desain dan rincian belum selesai |
-| 01 | [Fondasi aplikasi dan akses](stages/01-fondasi-akses.md) | Belum dimulai |
+| 00 | [Keputusan dan desain layar](stages/00-keputusan-desain.md) | Berjalan; keputusan dasar, preview, dan skema fisik (Q-03) terverifikasi; rincian lanjutan Q-01/Q-02 tetap diselesaikan sebelum stage terkait |
+| 01 | [Fondasi aplikasi dan akses](stages/01-fondasi-akses.md) | Berjalan; fondasi backend dan login terverifikasi, layout perlu pemeriksaan visual manual |
 | 02 | [User, project, dan kalender kerja](stages/02-user-project.md) | Belum dimulai |
 | 03 | [Input harian inti](stages/03-input-harian.md) | Belum dimulai |
 | 04 | [Koreksi laporan, izin, dan penutupan task](stages/04-koreksi-izin-penutupan.md) | Belum dimulai |

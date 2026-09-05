@@ -14,4 +14,4 @@ Admin mengelola user, project, dan keanggotaan user_project. Tenaga ahli hanya m
 
 ## Konsekuensi
 
-Validasi keanggotaan dilakukan di backend. User tidak membuat project atau bergabung sendiri. Kebijakan riwayat setelah keanggotaan dihapus perlu dirinci sebelum fitur perubahan anggota diselesaikan.
+Validasi keanggotaan dilakukan di backend. User tidak membuat project atau bergabung sendiri. Tenaga ahli tetap membaca histori miliknya setelah keluar project sesuai [ADR-0034](0034-akses-histori.md); hak mengoreksi histori setelah keluar masih dirinci pada Stage 4.
