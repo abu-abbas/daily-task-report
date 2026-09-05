@@ -1,6 +1,6 @@
 # Referensi pengaturan libur dari aplikasi yang sudah ada
 
-Sumber: screenshot tabel yang diberikan pengguna pada percakapan 5 September 2026. Ini referensi struktur dan cara input, bukan persetujuan mengganti skema kalender atau daftar libur resmi untuk seed. File gambar belum tersedia sebagai aset lokal.
+Sumber: screenshot tabel yang diberikan pengguna pada percakapan 5 September 2026. Bentuk tabel (nama, tanggal mulai, tanggal akhir) menjadi dasar tabel `holidays` di skema fisik ([ADR-0026](../adr/0026-kalender-kerja-tahunan.md), [ADR-0036](../adr/0036-skema-fisik-stage1.md)). Isi tanggal pada gambar hanya transkripsi contoh, bukan daftar libur resmi untuk seed.
 
 ## Struktur yang terlihat
 
@@ -11,28 +11,29 @@ Sumber: screenshot tabel yang diberikan pengguna pada percakapan 5 September 202
 | START_HOLIDAY | Tanggal mulai, ditampilkan dengan waktu 00:00:00 |
 | END_HOLIDAY | Tanggal akhir, ditampilkan dengan waktu 00:00:00 |
 
-Contoh pada gambar: Cuti Bersama Idul Fitri 1447 Hijriah memiliki tanggal mulai 2026-03-23 dan akhir 2026-03-24. Satu baris mewakili rentang dua tanggal. Libur satu hari menggunakan tanggal mulai dan akhir yang sama. Nilai di sini hanya ditranskripsikan dari gambar, belum diverifikasi sebagai kalender resmi.
+Contoh pada gambar: Cuti Bersama Idul Fitri 1447 Hijriah memiliki tanggal mulai 2026-03-23 dan akhir 2026-03-24. Satu baris mewakili rentang dua tanggal. Libur satu hari menggunakan tanggal mulai dan akhir yang sama.
 
-## Usulan penerapan pada aplikasi baru
+## Keputusan: tabel rentang sebagai sumber utama
 
-Admin dapat memasukkan nama/keterangan, tanggal mulai, dan tanggal akhir. Usulan rentang bersifat inklusif: libur 23–24 berarti kedua tanggal libur, sedangkan libur satu hari cukup memakai mulai = akhir. Validasi tanggal mulai tidak boleh sesudah tanggal akhir.
+Pengguna memilih pendekatan ini sebagai sumber utama, bukan sekadar input UI di atas tabel per tanggal. Alasannya: Sabtu-Minggu selalu libur tanpa pengecualian, jadi tidak perlu disimpan satu baris per tanggal untuk seluruh tahun — cukup simpan pengecualiannya.
 
-Untuk mempertahankan usulan penyimpanan minimum Stage 0, satu input rentang dapat memperbarui baris-baris tanggal pada work_calendar secara atomik. Ini memakai satu sumber status harian dan tetap mendukung Sabtu khusus kerja melalui is_workday. Tidak perlu menyimpan tabel rentang dan kalender harian sebagai dua sumber yang harus selalu disinkronkan.
+- **Aturan default** (dihitung, tidak disimpan): Senin-Jumat = hari kerja, Sabtu-Minggu = libur.
+- **Tabel `holidays`**: `id`, `nama`, `tanggal_mulai`, `tanggal_akhir` (rentang inklusif). Setiap tanggal di dalam rentang berstatus libur, termasuk bila jatuh pada hari kerja normal.
+- `isWorkday(tanggal)` = hari itu Senin-Jumat DAN tidak berada dalam rentang mana pun di `holidays`.
+- Tidak ada mekanisme menjadikan Sabtu/Minggu sebagai hari kerja khusus — di luar cakupan karena tidak dibutuhkan.
 
-Pilihan ini masih usulan desain. Jika pengguna ingin tabel rentang seperti screenshot menjadi sumber penyimpanan utama, skema perlu dirinci ulang: pola mingguan menjadi dasar, rentang menjadi pengecualian, serta status kelengkapan setiap tahun dan hari kerja khusus harus tetap dapat direpresentasikan.
+Validasi input: tanggal mulai tidak boleh sesudah tanggal akhir (`tanggal_akhir >= tanggal_mulai`, ditegakkan sebagai `CHECK` di DDL).
 
-## Kelengkapan kalender
+## Konsekuensi terhadap kelengkapan kalender
 
-- Tidak adanya libur pada suatu tanggal berbeda dari belum tersedianya kalender tahun tersebut.
-- Pada usulan satu baris per tanggal, periksa kelengkapan tanggal dalam rentang yang diperlukan; jangan menganggap tanggal yang hilang sebagai libur atau hari kerja.
-- Pada model yang hanya menyimpan rentang libur, daftar kosong tidak membuktikan satu tahun sudah lengkap. Diperlukan penanda atau proses konfirmasi kelengkapan tahunan jika model itu dipilih.
-- Saat menelusuri hari kerja sebelumnya, lewati akhir pekan dan seluruh tanggal berstatus libur, termasuk rentang libur beruntun dan lintas tahun. Tanggal khusus yang ditetapkan sebagai hari kerja tetap dihormati.
-- Kalender yang diperlukan tetapi belum tersedia menahan submit sesuai [ADR-0028](../adr/0028-pengelolaan-kalender.md).
+Karena status hari kerja selalu dihitung dari aturan + daftar libur, tidak ada lagi keadaan "kalender tahun ini belum diisi" — pertanyaan "apakah tanggal X hari kerja?" selalu punya jawaban. Ini menghapus mekanisme blok submit yang sebelumnya ada di [ADR-0028](../adr/0028-pengelolaan-kalender.md) versi awal.
+
+Saat menelusuri hari kerja sebelumnya (ADR-0006), lewati akhir pekan dan seluruh tanggal yang termasuk rentang `holidays`, termasuk rentang beruntun dan lintas tahun.
 
 ## Usulan form admin
 
 ```text
-Kalender kerja [Tahun]
+Daftar libur
 [+ Tambah libur]
 
 Nama/keterangan  [Cuti bersama              ]
@@ -43,6 +44,6 @@ Tanggal akhir    [2026-03-24                 ]
 [Batal] [Simpan libur]
 ```
 
-Pengubahan rentang tidak boleh diam-diam menimpa hari kerja khusus atau koreksi lain. Tampilkan tanggal terdampak sebelum menyimpan. Rincian kebijakan perubahan kalender historis tetap terbuka di Q-01.
+Perubahan/penghapusan baris `holidays` tidak boleh diam-diam menimpa koreksi lain yang sudah tersimpan pada log realisasi. Tampilkan tanggal terdampak sebelum menyimpan. Rincian kebijakan perubahan kalender terhadap histori tetap terbuka di Q-01.
 
-Lihat [bahan review Stage 0](../stages/00-review.md) dan [keputusan terbuka](../open-decisions.md).
+Lihat [ADR-0026](../adr/0026-kalender-kerja-tahunan.md), [ADR-0028](../adr/0028-pengelolaan-kalender.md), dan [keputusan terbuka](../open-decisions.md).

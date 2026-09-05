@@ -1,23 +1,23 @@
-# ADR-0028: Pengelolaan kalender bersama dan tanggal kosong
+# ADR-0028: Pengelolaan kalender bersama sebagai daftar libur
 
-- Status: diterima.
-- Tanggal: 2026-09-05.
+- Status: diterima; revisi menghapus mekanisme blok submit karena tidak lagi relevan.
+- Tanggal: 2026-09-05 (revisi: 2026-09-05).
 - Stage: 0 untuk keputusan; 2 untuk pengelolaan; 3/6 untuk penggunaan.
 - Melengkapi: [ADR-0026](0026-kalender-kerja-tahunan.md) dan [ADR-0006](0006-hari-kerja.md).
 
 ## Konteks
 
-Pengguna menerima satu kalender bersama yang dikelola admin, pola awal Senin–Jumat kerja/Sabtu–Minggu libur yang dapat diubah, serta penahanan input saat kalender belum tersedia.
+Pengguna menerima satu kalender bersama yang dikelola admin. Rancangan awal menahan submit laporan bila kalender per tanggal belum diisi lengkap; setelah [ADR-0026](0026-kalender-kerja-tahunan.md) direvisi menjadi aturan default mingguan (Senin–Jumat kerja, Sabtu–Minggu libur tetap) plus tabel `holidays`, keadaan "kalender belum tersedia" tidak bisa terjadi lagi — status hari kerja untuk tanggal berapa pun selalu bisa dihitung.
 
 ## Keputusan
 
-- Admin mengelola satu kalender untuk semua project dan tenaga ahli.
-- Pengisian awal tahun memakai Senin–Jumat sebagai hari kerja dan Sabtu–Minggu sebagai libur. Admin dapat mengubah status tanggal, termasuk hari kerja khusus dan libur tambahan.
-- Jika kalender yang diperlukan untuk menentukan tanggal pekerjaan belum tersedia, submit laporan ditahan sampai kalender dilengkapi.
-- Penentuan hari kerja sebelumnya dan hitungan task nyangkut membaca kalender yang sama, termasuk saat melewati tahun.
+- Admin mengelola satu daftar libur/cuti bersama (`holidays`) untuk semua project dan tenaga ahli, berbentuk rentang tanggal (nama, mulai, akhir) sesuai [referensi](../references/holiday-settings.md).
+- Senin–Jumat = hari kerja, Sabtu–Minggu = libur, tetap dan tidak dapat diubah admin per tanggal.
+- Admin hanya menambah tanggal libur tambahan di luar akhir pekan (libur nasional, cuti bersama). Tidak ada mekanisme menjadikan Sabtu/Minggu hari kerja.
+- Penentuan hari kerja sebelumnya dan hitungan task nyangkut membaca aturan + daftar libur yang sama, termasuk saat melewati tahun.
 
 ## Konsekuensi
 
-Pola awal hanya untuk mengisi kalender; perhitungan tetap memakai baris kalender yang sudah dikelola. Tanggal kosong tidak boleh dianggap libur lalu dilewati. UI menjelaskan tanggal yang belum tersedia dan data tersimpan tetap dapat dibaca.
+Tidak ada lagi keadaan "kalender belum lengkap" maupun blok submit karenanya — dihapus dari cakupan aplikasi. Perubahan pada daftar `holidays` berlaku ke depan dan ke belakang sesuai perhitungan, tapi tidak memindahkan tanggal log yang sudah tersimpan ([ADR-0032](0032-tanggal-bisnis.md)). UI admin mengikuti [referensi](../references/holiday-settings.md): input nama, tanggal mulai, tanggal akhir, validasi mulai ≤ akhir.
 
-Usulan teknis satu baris per tanggal dengan input rentang libur serta pengisian tahun tanpa menimpa koreksi ada di [bahan review](../stages/00-review.md). Asia/Jakarta, pemisahan cuti pribadi, dan larangan mengubah tanggal log tersimpan ditetapkan pada [ADR-0032](0032-tanggal-bisnis.md). Detail ambang nyangkut dan penyajian formulir lama masih dirinci pada Q-01.
+Asia/Jakarta, pemisahan cuti pribadi, dan larangan mengubah tanggal log tersimpan ditetapkan pada [ADR-0032](0032-tanggal-bisnis.md). Detail ambang nyangkut dan penyajian formulir lama masih dirinci pada Q-01.

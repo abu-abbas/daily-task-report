@@ -25,6 +25,5 @@ Pengguna mengizinkan pengisian atau koreksi realisasi hari kerja terakhir bulan 
 - Jika tanggal kerja pertama April mengacu ke tanggal kerja terakhir Maret, realisasi Maret tersebut boleh diisi atau dikoreksi pada hari itu.
 - Realisasi tanggal Maret yang lebih lama tetap ditolak.
 - Pada hari kerja berikutnya, memilih ulang formulir pertama April tidak mengaktifkan pengecualian.
-- Bila kalender tahun sebelumnya diperlukan tetapi kosong, blok submit sesuai [ADR-0028](0028-pengelolaan-kalender.md).
 
 Timezone bisnis telah ditetapkan Asia/Jakarta pada [ADR-0032](0032-tanggal-bisnis.md).

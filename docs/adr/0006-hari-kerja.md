@@ -10,7 +10,7 @@ Keputusan bisnis 6: menerima rekomendasi B.
 
 ## Keputusan
 
-Checklist realisasi mengambil rencana milik user aktif pada hari kerja sebelumnya menurut tabel kalender kerja tahunan (ADR-0026). Telusuri mundur dari tanggal laporan sampai menemukan tanggal yang ditandai hari kerja.
+Checklist realisasi mengambil rencana milik user aktif pada hari kerja sebelumnya menurut aturan kalender kerja (ADR-0026: default Senin–Jumat, dikurangi tanggal pada tabel `holidays`). Telusuri mundur dari tanggal laporan sampai menemukan tanggal yang berstatus hari kerja.
 
 ## Konsekuensi
 

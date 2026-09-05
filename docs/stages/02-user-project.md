@@ -9,14 +9,14 @@
 - Sediakan pengelolaan user, project, dan keanggotaan oleh admin.
 - Siapkan data contoh secukupnya untuk menguji satu user dengan beberapa project dan satu project dengan beberapa user.
 - Filter pilihan project berdasarkan keanggotaan; periksa kembali pada backend.
-- Sediakan tabel dan pengelolaan kalender kerja tahunan oleh admin: tanggal hari kerja/libur serta keterangan, dengan pola awal mingguan yang dapat diubah sesuai [ADR-0028](../adr/0028-pengelolaan-kalender.md). Jelaskan DDL minimum sebelum migration.
+- Sediakan pengelolaan daftar libur/cuti bersama (`holidays`, berbentuk rentang tanggal) oleh admin; Senin–Jumat kerja dan Sabtu–Minggu libur dihitung tetap, tidak diatur admin, sesuai [ADR-0028](../adr/0028-pengelolaan-kalender.md).
 
 ## Kriteria selesai dan pemeriksaan
 
 - [ ] Admin dapat mengelola data yang diperlukan untuk input harian.
 - [ ] Tenaga ahli tidak dapat mencatat pekerjaan pada project di luar keanggotaannya, termasuk lewat request langsung.
 - [ ] Perubahan keanggotaan mengikuti kebijakan riwayat yang sudah dirinci, tanpa menghilangkan histori secara tidak sengaja.
-- [ ] Hari libur dapat diatur selama setahun dan dipakai untuk penelusuran hari kerja sebelumnya, termasuk lintas tahun. Tanggal yang belum terisi ditangani sesuai keputusan eksplisit.
+- [ ] Hari libur dapat diatur admin (rentang tanggal) dan dipakai bersama aturan default mingguan untuk penelusuran hari kerja sebelumnya, termasuk lintas tahun.
 
 ## Dependensi terbuka
 

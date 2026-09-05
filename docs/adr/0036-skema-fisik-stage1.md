@@ -1,7 +1,7 @@
 # ADR-0036: Skema fisik minimum SQLite untuk Stage 1
 
-- Status: diterima; rincian implementasi (validasi role hierarki, kebijakan koreksi pasca keluar project) tetap dirinci saat Stage 1/2/4.
-- Tanggal: 2026-09-05.
+- Status: diterima; rincian implementasi (validasi role hierarki, kebijakan koreksi pasca keluar project) tetap dirinci saat Stage 1/2/4. Tabel kalender direvisi dari `work_calendar` menjadi `holidays` mengikuti revisi [ADR-0026](0026-kalender-kerja-tahunan.md); tidak ada perubahan lain pada DDL Stage 1.
+- Tanggal: 2026-09-05 (revisi tabel kalender: 2026-09-05).
 - Stage utama: [01](../stages/01-fondasi-akses.md), [02](../stages/02-user-project.md).
 - Melengkapi: [ADR-0002](0002-database-sqlite.md), [ADR-0026](0026-kalender-kerja-tahunan.md), [ADR-0031](0031-hierarki-supervisi.md), [ADR-0033](0033-rangkap-peran.md), [ADR-0034](0034-akses-histori.md).
 - Menutup: [Q-03](../open-decisions.md).
@@ -24,7 +24,7 @@ DDL lengkap ada di [`schema/0001_initial.sql`](../schema/0001_initial.sql). Ring
 | `task_logs` | Tidak ada perubahan struktur; **tidak** ditambah unique constraint pada kombinasi task/tanggal/user/jenis | Kolaborasi banyak user pada task/tanggal sama tetap harus mungkin ([ADR-0011](0011-kolaborasi-task.md)); duplikasi item milik user yang sama masih terbuka ([Q-05](../open-decisions.md)). |
 | `attachments` | `file_url` → `file_path` | Operasi lokal dahulu ([ADR-0020](0020-operasional-lokal.md)): path relatif di disk, bukan URL publik. Validasi JPG/PNG, maks 5 file/5 MB per file tetap di level aplikasi ([ADR-0016](0016-attachment.md)), bukan CHECK constraint. |
 | `leaves` | Tidak ada perubahan struktur | ([ADR-0032](0032-tanggal-bisnis.md)); larangan izin+realisasi tanggal sama ([ADR-0014](0014-izin-realisasi.md)) divalidasi di aplikasi, lintas tabel `leaves`/`task_logs`. |
-| `work_calendar` (baru) | `tanggal` primary key, `is_workday`, `keterangan` opsional | Satu sumber status harian ([ADR-0026](0026-kalender-kerja-tahunan.md)); baris hilang berarti kalender belum lengkap, bukan libur ([ADR-0028](0028-pengelolaan-kalender.md)). Input rentang libur pada UI admin memperbarui baris-baris ini secara atomik ([referensi](../references/holiday-settings.md)), tidak perlu tabel rentang terpisah. |
+| `holidays` (baru) | `id`, `nama`, `tanggal_mulai`, `tanggal_akhir` (rentang inklusif) | Daftar libur/cuti bersama sebagai pengecualian dari aturan default Senin–Jumat kerja/Sabtu–Minggu libur ([ADR-0026](0026-kalender-kerja-tahunan.md) revisi, [ADR-0028](0028-pengelolaan-kalender.md)); bentuk rentang mengikuti tabel yang sudah dipakai pengguna ([referensi](../references/holiday-settings.md)). Tidak ada lagi tabel satu baris per tanggal. |
 
 Foreign key SQLite aktif (`PRAGMA foreign_keys = ON`) sesuai [ADR-0002](0002-database-sqlite.md).
 

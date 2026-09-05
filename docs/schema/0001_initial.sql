@@ -110,10 +110,12 @@ CREATE TABLE leaves (
 );
 CREATE INDEX idx_leaves_user_tanggal ON leaves (user_id, tanggal);
 
--- Satu sumber status harian (ADR-0026/ADR-0028). Baris hilang = kalender belum lengkap,
--- bukan libur — jangan menganggap tanggal tanpa baris sebagai hari kerja atau libur.
-CREATE TABLE work_calendar (
-  tanggal TEXT PRIMARY KEY,
-  is_workday INTEGER NOT NULL,
-  keterangan TEXT
+-- Daftar libur/cuti bersama (ADR-0026/ADR-0028). Hari kerja = Senin-Jumat dan bukan
+-- termasuk rentang di tabel ini; Sabtu-Minggu selalu libur, dihitung, tidak disimpan.
+CREATE TABLE holidays (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nama TEXT NOT NULL,
+  tanggal_mulai TEXT NOT NULL,
+  tanggal_akhir TEXT NOT NULL CHECK (tanggal_akhir >= tanggal_mulai)
 );
+CREATE INDEX idx_holidays_rentang ON holidays (tanggal_mulai, tanggal_akhir);
