@@ -13,11 +13,11 @@ mkdirSync(dataDir, { recursive: true });
 const dbPath = process.env.DATABASE_PATH ?? join(dataDir, "app.db");
 
 export const db = new Database(dbPath, { create: true });
-db.exec("PRAGMA foreign_keys = ON;");
-db.exec("PRAGMA journal_mode = WAL;");
+db.run("PRAGMA foreign_keys = ON;");
+db.run("PRAGMA journal_mode = WAL;");
 
 function ensureMigrationsTable() {
-  db.exec(
+  db.run(
     `CREATE TABLE IF NOT EXISTS _migrations (
       name TEXT PRIMARY KEY,
       applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -39,7 +39,7 @@ export function runMigrations() {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(schemaDir, file), "utf-8");
     const runMigration = db.transaction(() => {
-      db.exec(sql);
+      db.run(sql);
       db.query("INSERT INTO _migrations (name) VALUES (?)").run(file);
     });
     runMigration();

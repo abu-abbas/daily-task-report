@@ -7,9 +7,9 @@
     "prepare": "git config --local core.hooksPath .githooks",
     "commitlint": "commitlint",
     "test:hooks": "bun test tests/commit-msg.test.ts",
-    "migrate": "bun --cwd server run migrate",
-    "dev:server": "bun --cwd server run dev",
-    "dev:frontend": "bun --cwd frontend run dev"
+    "migrate": "bun --cwd=server run migrate",
+    "dev:server": "bun --cwd=server run dev",
+    "dev:frontend": "bun --cwd=frontend run dev"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.2",

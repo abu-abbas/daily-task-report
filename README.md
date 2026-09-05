@@ -13,11 +13,9 @@ Stage 1 (fondasi aplikasi dan akses) sedang berjalan; lihat [bukti pelaksanaan](
 Prasyarat: Bun terpasang.
 
 ```sh
-bun install --frozen-lockfile   # root (tooling commit)
-bun --cwd frontend install
-bun --cwd server install
+bun install --frozen-lockfile   # sekali di root — workspaces meng-install frontend & server
 
-bun run migrate                 # jalankan migration ke server/../data/app.db
+bun run migrate                 # jalankan migration ke data/app.db
 bun run dev:server              # terminal 1 — backend di :3001
 bun run dev:frontend            # terminal 2 — frontend di :5173, proxy /api ke backend
 ```

@@ -27,7 +27,7 @@ export async function login(
   const hash = user?.password_hash ?? "$argon2id$dummy$hash$untuk$timing$konsisten";
   const valid = await Bun.password.verify(password, hash).catch(() => false);
 
-  if (!user || !user.password_hash || !valid) return null;
+  if (!user?.password_hash || !valid) return null;
 
   const token = randomToken();
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
