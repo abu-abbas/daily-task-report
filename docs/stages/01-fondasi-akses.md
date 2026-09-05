@@ -1,8 +1,8 @@
 # Stage 01 — Fondasi aplikasi dan akses
 
-- Status: Selesai; seluruh kriteria wajib terpenuhi.
+- Status: Selesai; seluruh kriteria wajib terpenuhi. Susulan belum diimplementasikan: [ADR-0038](../adr/0038-sso-gitlab.md) (login SSO GitLab CE) — tidak membuka ulang kriteria di atas.
 - Prasyarat: Stage 0 untuk stack, rancangan skema, dan akses.
-- Keputusan: [ADR-0001](../adr/0001-stack-typescript.md), [ADR-0002](../adr/0002-database-sqlite.md), [ADR-0003](../adr/0003-login-session.md), [ADR-0004](../adr/0004-hak-akses.md), [ADR-0021](../adr/0021-komponen-ui.md), [ADR-0023](../adr/0023-mobile-first.md), [ADR-0024](../adr/0024-tema.md), [ADR-0025](../adr/0025-metode-ponytail.md).
+- Keputusan: [ADR-0001](../adr/0001-stack-typescript.md), [ADR-0002](../adr/0002-database-sqlite.md), [ADR-0003](../adr/0003-login-session.md), [ADR-0004](../adr/0004-hak-akses.md), [ADR-0021](../adr/0021-komponen-ui.md), [ADR-0023](../adr/0023-mobile-first.md), [ADR-0024](../adr/0024-tema.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0038](../adr/0038-sso-gitlab.md).
 
 ## Cakupan
 

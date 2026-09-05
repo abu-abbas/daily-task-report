@@ -2,7 +2,7 @@
 
 - Status: Belum dimulai.
 - Prasyarat: Stage 4.
-- Keputusan: [ADR-0004](../adr/0004-hak-akses.md), [ADR-0009](../adr/0009-edit-submit.md), [ADR-0015](../adr/0015-kendala.md), [ADR-0016](../adr/0016-attachment.md), [ADR-0023](../adr/0023-mobile-first.md), [ADR-0024](../adr/0024-tema.md), [ADR-0025](../adr/0025-metode-ponytail.md).
+- Keputusan: [ADR-0004](../adr/0004-hak-akses.md), [ADR-0009](../adr/0009-edit-submit.md), [ADR-0015](../adr/0015-kendala.md), [ADR-0016](../adr/0016-attachment.md), [ADR-0023](../adr/0023-mobile-first.md), [ADR-0024](../adr/0024-tema.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0039](../adr/0039-integrasi-commit-gitlab.md).
 
 ## Cakupan
 
@@ -11,6 +11,7 @@
 - Validasi server dan pembatasan akses file mengikuti kewenangan laporan.
 - Bangun riwayat per tanggal pekerjaan dengan detail realisasi/rencana, kendala, attachment, dan izin.
 - Tangani kegagalan upload serta edit/penghapusan referensi file secara konsisten.
+- Sediakan penautan commit GitLab (manual, milik user sendiri) ke task_log sebagai bukti pendukung, sesuai [ADR-0039](../adr/0039-integrasi-commit-gitlab.md).
 
 ## Kriteria selesai dan pemeriksaan
 

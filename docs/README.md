@@ -51,9 +51,9 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0023 | [Mobile-first dan tetap nyaman di laptop](adr/0023-mobile-first.md) |
 | 0024 | [Light mode dan dark mode](adr/0024-tema.md) |
 | 0025 | [Ponytail wajib digunakan](adr/0025-metode-ponytail.md) |
-| 0026 | [Tabel kalender kerja tahunan](adr/0026-kalender-kerja-tahunan.md) |
+| 0026 | [Aturan kalender kerja — default mingguan plus tabel libur](adr/0026-kalender-kerja-tahunan.md) |
 | 0027 | [Hook Conventional Commits](adr/0027-hook-conventional-commits.md) |
-| 0028 | [Pengelolaan kalender bersama dan tanggal kosong](adr/0028-pengelolaan-kalender.md) |
+| 0028 | [Pengelolaan kalender bersama sebagai daftar libur](adr/0028-pengelolaan-kalender.md) |
 | 0029 | [Cakupan atasan langsung — digantikan ADR-0031](adr/0029-atasan-langsung.md) |
 | 0030 | [Pengecualian realisasi pada awal bulan](adr/0030-pengecualian-awal-bulan.md) |
 | 0031 | [Hierarki atasan, supervisi, dan tenaga ahli](adr/0031-hierarki-supervisi.md) |
@@ -63,6 +63,8 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0035 | [Bun native tanpa framework/ORM](adr/0035-backend-framework.md) |
 | 0036 | [Skema fisik minimum Stage 1](adr/0036-skema-fisik-stage1.md) |
 | 0037 | [vee-validate+zod, TanStack Query, TanStack Table](adr/0037-library-frontend-tambahan.md) |
+| 0038 | [Login SSO via GitLab CE self-hosted](adr/0038-sso-gitlab.md) |
+| 0039 | [Commit GitLab sebagai bukti pendukung laporan](adr/0039-integrasi-commit-gitlab.md) |
 
 ## Tahapan pekerjaan
 
