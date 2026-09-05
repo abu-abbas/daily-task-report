@@ -1,11 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // DATABASE_PATH harus di-set sebelum src/db di-import (module top-level membaca env sekali).
-const tmpDir = mkdtempSync(join(tmpdir(), "laporan-harian-test-"));
-process.env.DATABASE_PATH = join(tmpDir, "test.db");
+// "../src/db" adalah singleton ESM yang dibagi lintas file test dalam satu proses "bun test",
+// jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini (lihat users.test.ts).
+process.env.DATABASE_PATH ??= join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
 const { db, runMigrations } = await import("../src/db");
 const { login, logout, getAuthContext } = await import("../src/auth");
@@ -19,11 +20,6 @@ beforeAll(async () => {
   db.query(
     "INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)",
   ).run("Tenaga Ahli Uji", EMAIL, passwordHash);
-});
-
-afterAll(() => {
-  db.close();
-  rmSync(tmpDir, { recursive: true, force: true });
 });
 
 describe("login/session", () => {

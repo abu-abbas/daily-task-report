@@ -39,3 +39,31 @@ export const postLogin = (email: string, password: string) =>
   });
 
 export const postLogout = () => api<void>("/logout", { method: "POST" });
+
+export type Role = "tenaga_ahli" | "supervisi" | "atasan" | "admin";
+
+export interface AdminUser {
+  id: number;
+  nama: string;
+  email: string;
+  roles: Role[];
+  atasanId: number | null;
+  supervisiId: number | null;
+}
+
+export interface UserPayload {
+  nama: string;
+  email: string;
+  password?: string;
+  roles: Role[];
+  atasanId: number | null;
+  supervisiId: number | null;
+}
+
+export const fetchUsers = () => api<{ users: AdminUser[] }>("/users");
+
+export const createUser = (payload: UserPayload) =>
+  api<{ user: AdminUser }>("/users", { method: "POST", body: JSON.stringify(payload) });
+
+export const updateUser = (id: number, payload: UserPayload) =>
+  api<{ user: AdminUser }>(`/users/${id}`, { method: "PUT", body: JSON.stringify(payload) });

@@ -1,5 +1,6 @@
 import { runMigrations } from "./db";
 import { handleLogin, handleLogout, handleMe } from "./routes/auth";
+import { handleCreateUser, handleListUsers, handleUpdateUser } from "./routes/users";
 
 runMigrations();
 
@@ -11,6 +12,8 @@ Bun.serve({
     "/api/login": { POST: handleLogin },
     "/api/logout": { POST: handleLogout },
     "/api/me": { GET: handleMe },
+    "/api/users": { GET: handleListUsers, POST: handleCreateUser },
+    "/api/users/:id": { PUT: (req) => handleUpdateUser(req, Number(req.params.id)) },
   },
   fetch() {
     return new Response("Not found", { status: 404 });

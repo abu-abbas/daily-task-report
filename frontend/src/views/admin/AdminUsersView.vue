@@ -45,18 +45,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-
-// Data contoh sementara — diganti pemanggilan API sungguhan saat backend Stage 2 siap.
-type Role = "tenaga_ahli" | "supervisi" | "atasan" | "admin";
-
-interface AdminUser {
-  id: number;
-  nama: string;
-  email: string;
-  roles: Role[];
-  atasanId: number | null;
-  supervisiId: number | null;
-}
+import { ApiError, type AdminUser, type Role } from "@/lib/api";
+import { useCreateUser, useUpdateUser, useUsersQuery } from "@/composables/useUsers";
 
 const ROLE_LABEL: Record<Role, string> = {
   tenaga_ahli: "Tenaga ahli",
@@ -65,14 +55,12 @@ const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
 };
 
-const users = ref<AdminUser[]>([
-  { id: 1, nama: "Rudi Hartono", email: "rudi.hartono@kantor.test", roles: ["admin", "tenaga_ahli"], atasanId: null, supervisiId: null },
-  { id: 2, nama: "Siti Aminah", email: "siti.aminah@kantor.test", roles: ["atasan"], atasanId: null, supervisiId: null },
-  { id: 3, nama: "Budi Santoso", email: "budi.santoso@kantor.test", roles: ["supervisi", "tenaga_ahli"], atasanId: 2, supervisiId: null },
-  { id: 4, nama: "Dewi Lestari", email: "dewi.lestari@kantor.test", roles: ["supervisi"], atasanId: 2, supervisiId: null },
-  { id: 5, nama: "Agus Prasetyo", email: "agus.prasetyo@kantor.test", roles: ["tenaga_ahli"], atasanId: null, supervisiId: 3 },
-  { id: 6, nama: "Maya Puspita", email: "maya.puspita@kantor.test", roles: ["tenaga_ahli"], atasanId: null, supervisiId: 4 },
-]);
+const usersQuery = useUsersQuery();
+const createUserMutation = useCreateUser();
+const updateUserMutation = useUpdateUser();
+
+const users = computed(() => usersQuery.data.value?.users ?? []);
+const isSaving = computed(() => createUserMutation.isPending.value || updateUserMutation.isPending.value);
 
 function namaUser(id: number | null): string {
   if (id === null) return "—";
@@ -97,6 +85,7 @@ const rolesError = ref<string | null>(null);
 interface PendingPayload {
   nama: string;
   email: string;
+  password?: string;
   roles: Role[];
   atasanId: number | null;
   supervisiId: number | null;
@@ -159,6 +148,7 @@ const onSubmit = form.handleSubmit((values) => {
   pendingPayload.value = {
     nama: values.nama,
     email: values.email,
+    password: values.password || undefined,
     roles: [...selectedRoles.value],
     atasanId: atasanId.value === "none" ? null : Number(atasanId.value),
     supervisiId: supervisiId.value === "none" ? null : Number(supervisiId.value),
@@ -166,22 +156,30 @@ const onSubmit = form.handleSubmit((values) => {
   confirmOpen.value = true;
 });
 
-function confirmSave() {
+async function confirmSave() {
   const payload = pendingPayload.value;
   if (!payload) return;
 
-  if (editingId.value === null) {
-    const nextId = Math.max(0, ...users.value.map((u) => u.id)) + 1;
-    users.value.push({ id: nextId, ...payload });
-    toast.success(`User "${payload.nama}" ditambahkan.`);
-  } else {
-    const target = users.value.find((u) => u.id === editingId.value);
-    if (target) Object.assign(target, payload);
-    toast.success(`User "${payload.nama}" diperbarui.`);
+  try {
+    if (editingId.value === null) {
+      await createUserMutation.mutateAsync(payload);
+      toast.success(`User "${payload.nama}" ditambahkan.`);
+    } else {
+      await updateUserMutation.mutateAsync({ id: editingId.value, payload });
+      toast.success(`User "${payload.nama}" diperbarui.`);
+    }
+    pendingPayload.value = null;
+    confirmOpen.value = false;
+    dialogOpen.value = false;
+  } catch (err) {
+    confirmOpen.value = false;
+    const message = err instanceof ApiError ? err.message : "Gagal menyimpan, coba lagi.";
+    if (err instanceof ApiError && err.status === 409) {
+      form.setFieldError("email", message);
+    } else {
+      toast.error(message);
+    }
   }
-
-  pendingPayload.value = null;
-  dialogOpen.value = false;
 }
 </script>
 
@@ -281,7 +279,7 @@ function confirmSave() {
             </div>
 
             <DialogFooter>
-              <Button type="submit">Simpan</Button>
+              <Button type="submit" :disabled="isSaving">{{ isSaving ? "Menyimpan..." : "Simpan" }}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -298,8 +296,10 @@ function confirmSave() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction @click="confirmSave">Ya, simpan</AlertDialogAction>
+            <AlertDialogCancel :disabled="isSaving">Batal</AlertDialogCancel>
+            <AlertDialogAction :disabled="isSaving" @click="confirmSave">
+              {{ isSaving ? "Menyimpan..." : "Ya, simpan" }}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -318,7 +318,9 @@ function confirmSave() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          <TableEmpty v-if="users.length === 0" :colspan="6">Belum ada user.</TableEmpty>
+          <TableEmpty v-if="usersQuery.isPending.value" :colspan="6">Memuat data user...</TableEmpty>
+          <TableEmpty v-else-if="usersQuery.isError.value" :colspan="6">Gagal memuat data user.</TableEmpty>
+          <TableEmpty v-else-if="users.length === 0" :colspan="6">Belum ada user.</TableEmpty>
           <TableRow v-for="user in users" :key="user.id">
             <TableCell class="font-medium">{{ user.nama }}</TableCell>
             <TableCell class="text-muted-foreground">{{ user.email }}</TableCell>
