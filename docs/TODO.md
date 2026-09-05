@@ -35,11 +35,11 @@ ADR menjadi sumber keputusan, file stage menjadi sumber kriteria selesai, dan ha
 - [x] Catat jawaban serta koreksi terbaru di ADR dan perbarui [keputusan terbuka](open-decisions.md). Skema fisik dan rincian tahap berikutnya tetap dipisahkan dari keputusan pengguna.
 - [ ] Selesaikan seluruh kriteria [Stage 0](stages/00-keputusan-desain.md).
 
-Langkah berikutnya: periksa tampilan Stage 1 di browser nyata (mobile/laptop, kedua tema, kontras, fokus keyboard) lalu lanjut Stage 2 (user/project/kalender). Rincian kalender/provisioning diselesaikan pada stage terkait; Q-04/Q-05 sebelum fitur edit, sedangkan template Word menunggu Stage 7.
+Langkah berikutnya: lanjut Stage 2 (user/project/kalender kerja). Rincian kalender/provisioning diselesaikan pada stage terkait; Q-04/Q-05 sebelum fitur edit, sedangkan template Word menunggu Stage 7.
 
 ## Urutan implementasi
 
-- [ ] **[Stage 1 — Fondasi dan akses](stages/01-fondasi-akses.md):** Berjalan — setup aplikasi, migration, dan login/session terverifikasi (lihat bukti pelaksanaan); tersisa pemeriksaan visual layout mobile/laptop/kedua tema di browser nyata.
+- [x] **[Stage 1 — Fondasi dan akses](stages/01-fondasi-akses.md):** Selesai — setup aplikasi, migration, login/session, dan layout dasar (mobile/laptop, kedua tema) terverifikasi (lihat bukti pelaksanaan).
 - [ ] **[Stage 2 — User, project, kalender](stages/02-user-project.md):** pengelolaan user/anggota/project dan kalender kerja tahunan, termasuk penelusuran lintas tahun.
 - [ ] **[Stage 3 — Input harian](stages/03-input-harian.md):** checklist realisasi, kerjaan tambahan, cold start, rencana manual, dan simpan atomik. Rinci identitas item/submit pada Q-05 sebelum membangun penyimpanan.
 - [ ] **[Stage 4 — Koreksi, izin, penutupan](stages/04-koreksi-izin-penutupan.md):** edit/backdate, cegah duplikasi, konflik izin/realisasi, serta penutupan dengan deskripsi opsional. Selesaikan Q-04/Q-05 yang relevan.

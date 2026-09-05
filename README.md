@@ -6,7 +6,7 @@ Mulai dari [checklist pekerjaan](docs/TODO.md) untuk melihat progres dan langkah
 
 Rancangan layar dapat dibuka di browser melalui [preview Stage 0](docs/stages/00-preview.html). Tersedia contoh mobile/desktop dan light/dark mode; data tidak disimpan.
 
-Stage 1 (fondasi aplikasi dan akses) sedang berjalan; lihat [bukti pelaksanaan](docs/stages/01-fondasi-akses.md). Ikuti ADR yang diterima dan ponytail full saat mengerjakan setiap stage.
+Stage 1 (fondasi aplikasi dan akses) selesai; lihat [bukti pelaksanaan](docs/stages/01-fondasi-akses.md). Stage 2 (user, project, kalender kerja) berikutnya. Ikuti ADR yang diterima dan ponytail full saat mengerjakan setiap stage.
 
 ## Menjalankan aplikasi (Stage 1)
 
