@@ -1,67 +1,43 @@
 <script setup lang="ts">
-import { useRouter } from "vue-router";
-import { Moon, Sun, LogOut } from "@lucide/vue";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useTheme } from "@/composables/useTheme";
-import { useLogout, useMe } from "@/composables/useAuth";
+import { computed } from "vue";
+import { useRoute } from "vue-router";
+import { ChevronRight } from "@lucide/vue";
+import AppSidebar from "@/components/layout/AppSidebar.vue";
+import AppSidebarRight from "@/components/layout/AppSidebarRight.vue";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
 
-const { theme, toggle } = useTheme();
-const me = useMe();
-const logout = useLogout();
-const router = useRouter();
-
-async function handleLogout() {
-  await logout.mutateAsync();
-  router.push("/login");
-}
+const route = useRoute();
+const pageTitle = computed(() => ({
+  input: "Input harian",
+  riwayat: "Riwayat",
+  "admin-users": "Kelola user",
+}[String(route.name)] ?? "Ruang kerja"));
 </script>
 
 <template>
-  <div class="flex min-h-svh flex-col">
-    <header class="border-b">
-      <div class="mx-auto flex max-w-2xl items-center justify-between gap-4 p-4">
-        <nav class="flex items-center gap-4">
-          <RouterLink to="/input" class="text-sm font-medium" active-class="text-primary">
-            Input
-          </RouterLink>
-          <RouterLink to="/riwayat" class="text-sm font-medium" active-class="text-primary">
-            Riwayat
-          </RouterLink>
+  <SidebarProvider>
+    <a href="#main-content" class="sr-only z-50 rounded-lg bg-background p-3 focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
+      Lewati ke konten
+    </a>
+    <AppSidebar />
+    <SidebarInset class="min-w-0">
+      <header class="flex h-16 shrink-0 items-center gap-2 border-b px-3">
+        <SidebarTrigger class="size-11 shrink-0 md:size-8" aria-label="Buka/tutup sidebar" />
+        <Separator orientation="vertical" class="mr-2 data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-center" />
+        <nav aria-label="Breadcrumb" class="min-w-0 text-sm">
+          <ol class="flex min-w-0 items-center gap-2">
+            <li class="hidden text-muted-foreground md:block">{{ route.name === 'admin-users' ? 'Administrasi' : 'Laporan' }}</li>
+            <li class="hidden md:block"><ChevronRight class="size-3.5 text-muted-foreground" aria-hidden="true" /></li>
+            <li aria-current="page" class="truncate">{{ pageTitle }}</li>
+          </ol>
         </nav>
+      </header>
 
-        <div class="flex items-center gap-2">
-          <Button variant="ghost" size="icon" aria-label="Ganti tema" @click="toggle">
-            <Sun v-if="theme === 'dark'" class="size-4" />
-            <Moon v-else class="size-4" />
-          </Button>
-
-          <DropdownMenu v-if="me.data.value?.user">
-            <DropdownMenuTrigger as-child>
-              <Button variant="outline" size="sm">{{ me.data.value.user.nama }}</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>{{ me.data.value.user.email }}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem @click="handleLogout">
-                <LogOut class="mr-2 size-4" />
-                Keluar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+      <div id="main-content" tabindex="-1" class="flex min-w-0 flex-1 flex-col gap-4 p-5 outline-none">
+        <slot />
       </div>
-    </header>
-
-    <main class="mx-auto w-full max-w-2xl flex-1 p-4">
-      <slot />
-    </main>
-  </div>
+    </SidebarInset>
+    <AppSidebarRight />
+  </SidebarProvider>
 </template>

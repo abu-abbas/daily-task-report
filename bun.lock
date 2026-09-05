@@ -13,6 +13,7 @@
       "name": "frontend",
       "version": "0.0.0",
       "dependencies": {
+        "@internationalized/date": "^3.12.4",
         "@lucide/vue": "^1.41.0",
         "@tanstack/vue-query": "^5.102.8",
         "@tanstack/vue-table": "^9.2.4",

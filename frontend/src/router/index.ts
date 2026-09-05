@@ -23,6 +23,11 @@ const router = createRouter({
       name: "riwayat",
       component: () => import("@/views/RiwayatView.vue"),
     },
+    {
+      path: "/admin/users",
+      name: "admin-users",
+      component: () => import("@/views/admin/AdminUsersView.vue"),
+    },
   ],
 });
 

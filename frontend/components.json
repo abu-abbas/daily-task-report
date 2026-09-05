@@ -1,18 +1,18 @@
 {
   "$schema": "https://shadcn-vue.com/schema.json",
-  "style": "reka-nova",
-  "font": "geist-sans",
+  "style": "reka-mira",
+  "font": "figtree",
   "typescript": true,
   "tailwind": {
     "config": "",
     "css": "src/style.css",
-    "baseColor": "neutral",
+    "baseColor": "olive",
     "cssVariables": true,
     "prefix": ""
   },
   "iconLibrary": "lucide",
   "rtl": false,
-  "pointer": false,
+  "pointer": true,
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils",
