@@ -65,6 +65,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0037 | [vee-validate+zod, TanStack Query, TanStack Table](adr/0037-library-frontend-tambahan.md) |
 | 0038 | [Login SSO via GitLab CE self-hosted](adr/0038-sso-gitlab.md) |
 | 0039 | [Commit GitLab sebagai bukti pendukung laporan](adr/0039-integrasi-commit-gitlab.md) |
+| 0040 | [Import project dari GitLab CE sebagai alternatif input manual](adr/0040-import-project-gitlab.md) |
 
 ## Tahapan pekerjaan
 
