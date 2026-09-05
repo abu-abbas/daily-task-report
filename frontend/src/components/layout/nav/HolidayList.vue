@@ -1,25 +1,27 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Check, ChevronRight } from "@lucide/vue";
+import { Check, ChevronRight, Trash2 } from "@lucide/vue";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 
-// Data contoh sementara — diganti data holidays sungguhan saat pengelolaan kalender (Stage 2) siap.
 export interface Holiday {
+  id: number;
   nama: string;
   tanggalMulai: string;
   tanggalAkhir: string;
 }
 
-const props = defineProps<{ holidays: Holiday[] }>();
+const props = defineProps<{ holidays: Holiday[]; canManage?: boolean }>();
+const emit = defineEmits<{ delete: [id: number] }>();
 
 const hariIni = new Date().toISOString().slice(0, 10);
 
@@ -56,7 +58,7 @@ const kelompok = computed(() => [
         <CollapsibleContent>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem v-for="h in grup.items" :key="h.nama + h.tanggalMulai">
+              <SidebarMenuItem v-for="h in grup.items" :key="h.id">
                 <SidebarMenuButton>
                   <div
                     :data-active="index === 0"
@@ -67,6 +69,9 @@ const kelompok = computed(() => [
                   <span class="truncate">{{ h.nama }}</span>
                   <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ formatRentang(h) }}</span>
                 </SidebarMenuButton>
+                <SidebarMenuAction v-if="canManage" show-on-hover :aria-label="`Hapus ${h.nama}`" @click="emit('delete', h.id)">
+                  <Trash2 />
+                </SidebarMenuAction>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

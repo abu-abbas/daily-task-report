@@ -1,6 +1,6 @@
 # Stage 02 — User, project, dan kalender kerja
 
-- Status: Berjalan — pengelolaan user (CRUD, peran, hierarki) selesai dan teruji; project, keanggotaan, dan kalender/libur belum dikerjakan.
+- Status: Berjalan — pengelolaan user (CRUD, peran, hierarki) dan kalender/libur selesai dan teruji; project serta keanggotaan belum dikerjakan.
 - Prasyarat: Stage 1.
 - Keputusan: [ADR-0004](../adr/0004-hak-akses.md), [ADR-0005](../adr/0005-project-keanggotaan.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0026](../adr/0026-kalender-kerja-tahunan.md), [ADR-0040](../adr/0040-import-project-gitlab.md).
 
@@ -14,10 +14,10 @@
 
 ## Kriteria selesai dan pemeriksaan
 
-- [ ] Admin dapat mengelola data yang diperlukan untuk input harian. Bagian user selesai (lihat bukti); project, keanggotaan, dan kalender/libur masih tersisa.
+- [ ] Admin dapat mengelola data yang diperlukan untuk input harian. Bagian user dan kalender/libur selesai (lihat bukti); project dan keanggotaan masih tersisa.
 - [ ] Tenaga ahli tidak dapat mencatat pekerjaan pada project di luar keanggotaannya, termasuk lewat request langsung.
 - [ ] Perubahan keanggotaan mengikuti kebijakan riwayat yang sudah dirinci, tanpa menghilangkan histori secara tidak sengaja.
-- [ ] Hari libur dapat diatur admin (rentang tanggal) dan dipakai bersama aturan default mingguan untuk penelusuran hari kerja sebelumnya, termasuk lintas tahun.
+- [ ] Hari libur dapat diatur admin (rentang tanggal) dan dipakai bersama aturan default mingguan untuk penelusuran hari kerja sebelumnya, termasuk lintas tahun. Pengelolaan datanya (CRUD) sudah selesai (lihat bukti); pemakaian nyata untuk penelusuran hari kerja sebelumnya menyusul saat Stage 3 dibangun.
 
 ## Dependensi terbuka
 
@@ -29,4 +29,8 @@ Kebijakan keanggotaan pada Q-02 dan rincian pengelolaan kalender pada Q-01. Liha
 - **Test otomatis**: `server/tests/users.test.ts` (10 test) — otorisasi (401/403), create sukses, email dobel, tanpa peran, atasan salah peran, update sukses, atasan diri sendiri, user tidak ditemukan. Total 16 test lolos bersama `auth.test.ts` yang sudah ada.
 - **Catatan isolasi test**: `server/src/db.ts` adalah singleton ESM yang otomatis dibagi lintas file test dalam satu proses `bun test` — `db.close()`/hapus folder tmp tidak boleh dipanggil per file (bikin file lain crash), sekarang hanya `DATABASE_PATH` yang di-set sekali (`??=`) dan dibiarkan hidup sampai proses test selesai.
 - **Frontend**: `AdminUsersView.vue` sudah memakai data sungguhan lewat `useUsersQuery`/`useCreateUser`/`useUpdateUser` (`composables/useUsers.ts`, TanStack Query) menggantikan fixture; error 409 (email dobel) ditampilkan sebagai error field email, error lain lewat toast. Diverifikasi end-to-end lewat UI nyata (bukan fixture): login admin sungguhan, tabel menampilkan isi database apa adanya, tambah user lewat form + AlertDialog konfirmasi benar-benar tersimpan ke SQLite dan muncul setelah refresh.
-- **Belum dikerjakan**: pengelolaan project, keanggotaan (`user_project`), dan kalender/libur (`holidays`) — masih fixture di sidebar, backend menyusul.
+- **Backend kalender/libur**: `GET/POST /api/holidays` dan `DELETE /api/holidays/:id` (`server/src/routes/holidays.ts`). Baca (`GET`) terbuka untuk siapa pun yang login (bukan cuma admin) karena akan dipakai semua user saat penelusuran hari kerja sebelumnya di Stage 3; tulis (`POST`/`DELETE`) tetap `requireAdmin`, sesuai [ADR-0028](../adr/0028-pengelolaan-kalender.md). Validasi: `nama` wajib, tanggal harus format ISO (`z.iso.date()`) dan `tanggal_akhir >= tanggal_mulai` (dicek di kode maupun `CHECK` di skema).
+- **Test otomatis**: `server/tests/holidays.test.ts` (10 test) — otorisasi baca (401, tapi tenaga ahli tetap boleh baca), otorisasi tulis (403 non-admin), create sukses, rentang tanggal terbalik, format tanggal tidak ISO, muncul di daftar, delete sukses, delete ganda (404). Total 26 test lolos bersama `users.test.ts`/`auth.test.ts`.
+- **Frontend**: `AppSidebarRight.vue` memakai `useHolidaysQuery`/`useCreateHoliday`/`useDeleteHoliday` (`composables/useHolidays.ts`) menggantikan fixture; tombol "Tambah libur" dan aksi hapus per item hanya tampil untuk admin (`canManage`), keduanya lewat `AlertDialog` konfirmasi lebih dulu. Diverifikasi end-to-end: tambah lewat form tersimpan ke SQLite dan muncul di daftar, hapus lewat UI benar-benar mengirim `DELETE` (dilacak lewat trace jaringan) dan hilang dari database.
+- **Bug ditemukan dan diperbaiki selama verifikasi** (ketahuan karena diuji lewat browser sungguhan, bukan cuma typecheck/build): (1) dialog "Tambah libur" langsung tertutup sendiri setelah terbuka karena `SidebarMenuButton` di dalam `DialogTrigger as-child` punya `@click` sendiri yang balapan dengan `onClick` toggle bawaan `DialogTrigger`; diperbaiki dengan memindahkan reset form ke `watch(dialogOpen)` alih-alih menimpa langsung di handler klik. (2) Tombol hapus tidak pernah benar-benar memanggil API karena `deleteTarget` (data yang mau dihapus) di-null-kan lewat event tutup dialog yang jalan lebih dulu daripada handler konfirmasi; diperbaiki dengan memisahkan state buka/tutup dialog (`deleteConfirmOpen`) dari data target hapus (`deleteTarget`), sama seperti pola form tambah yang sudah benar.
+- **Belum dikerjakan**: pengelolaan project dan keanggotaan (`user_project`) — masih fixture di sidebar, backend menyusul.

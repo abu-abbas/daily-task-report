@@ -120,7 +120,10 @@ function toggleRole(role: Role, checked: boolean) {
 
 function openCreate() {
   editingId.value = null;
-  form.resetForm();
+  // resetForm() tanpa argumen balik ke initial values TERAKHIR yang di-set — kalau
+  // sebelumnya openEdit() menyimpan data user sebagai initial values, form ini akan
+  // muncul terisi lagi. Set eksplisit ke kosong.
+  form.resetForm({ values: { nama: "", email: "", password: "" } });
   selectedRoles.value = [];
   atasanId.value = "none";
   supervisiId.value = "none";

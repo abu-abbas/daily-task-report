@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { toast } from "vue-sonner";
 import { Moon, Plus, Sun } from "@lucide/vue";
 import { useTheme } from "@/composables/useTheme";
+import { useMe } from "@/composables/useAuth";
+import { useCreateHoliday, useDeleteHoliday, useHolidaysQuery } from "@/composables/useHolidays";
+import { ApiError } from "@/lib/api";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,17 +40,16 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import HolidayList, { type Holiday } from "@/components/layout/nav/HolidayList.vue";
+import HolidayList from "@/components/layout/nav/HolidayList.vue";
 
 const { theme, toggle } = useTheme();
+const me = useMe();
+const canManage = computed(() => me.data.value?.user.roles.includes("admin") ?? false);
 
-// Data contoh sementara — diganti data holidays sungguhan saat pengelolaan kalender (Stage 2) siap.
-// Tanggal ini transkripsi dari referensi libur pengguna (docs/references/holiday-settings.md), bukan daftar resmi.
-const holidays = ref<Holiday[]>([
-  { nama: "Maulid Nabi Muhammad S.A.W.", tanggalMulai: "2026-08-25", tanggalAkhir: "2026-08-25" },
-  { nama: "Cuti Bersama Kelahiran Yesus Kristus", tanggalMulai: "2026-12-24", tanggalAkhir: "2026-12-24" },
-  { nama: "Kelahiran Yesus Kristus", tanggalMulai: "2026-12-25", tanggalAkhir: "2026-12-25" },
-]);
+const holidaysQuery = useHolidaysQuery();
+const holidays = computed(() => holidaysQuery.data.value?.holidays ?? []);
+const createHolidayMutation = useCreateHoliday();
+const deleteHolidayMutation = useDeleteHoliday();
 
 const dialogOpen = ref(false);
 const confirmOpen = ref(false);
@@ -56,13 +58,18 @@ const tanggalMulai = ref("");
 const tanggalAkhir = ref("");
 const formError = ref<string | null>(null);
 
-function openTambah() {
+// DialogTrigger sendiri sudah men-toggle dialogOpen lewat onClick bawaan reka-ui.
+// Kalau di sini juga di-set imperatif lewat @click pada elemen yang sama, kedua handler
+// bisa berebut urutan eksekusi dan saling membatalkan (toggle balik ke tertutup begitu
+// terbuka). Reset field lewat watch supaya cuma bereaksi terhadap perubahan open, bukan
+// ikut memutuskan apakah dialog terbuka atau tidak.
+watch(dialogOpen, (open) => {
+  if (!open) return;
   nama.value = "";
   tanggalMulai.value = "";
   tanggalAkhir.value = "";
   formError.value = null;
-  dialogOpen.value = true;
-}
+});
 
 function submitForm() {
   if (!nama.value || !tanggalMulai.value || !tanggalAkhir.value) {
@@ -77,10 +84,50 @@ function submitForm() {
   confirmOpen.value = true;
 }
 
-function confirmTambah() {
-  holidays.value.push({ nama: nama.value, tanggalMulai: tanggalMulai.value, tanggalAkhir: tanggalAkhir.value });
-  toast.success(`Libur "${nama.value}" ditambahkan.`);
-  dialogOpen.value = false;
+async function confirmTambah() {
+  try {
+    await createHolidayMutation.mutateAsync({
+      nama: nama.value,
+      tanggalMulai: tanggalMulai.value,
+      tanggalAkhir: tanggalAkhir.value,
+    });
+    toast.success(`Libur "${nama.value}" ditambahkan.`);
+    confirmOpen.value = false;
+    dialogOpen.value = false;
+  } catch (err) {
+    confirmOpen.value = false;
+    formError.value = err instanceof ApiError ? err.message : "Gagal menyimpan, coba lagi.";
+    dialogOpen.value = true;
+  }
+}
+
+// deleteConfirmOpen (visibilitas dialog) dan deleteTarget (data yang mau dihapus) sengaja
+// dipisah: AlertDialogAction bawaan reka-ui punya onClick sendiri buat menutup dialog, dan
+// itu jalan SEBELUM @click="confirmDelete" milik kita (urutan gabungan handler klik). Kalau
+// deleteTarget ikut di-null-kan lewat event tutup dialog itu, confirmDelete() akan membaca
+// null duluan dan gagal diam-diam tanpa pernah memanggil API hapus.
+const deleteConfirmOpen = ref(false);
+const deleteTarget = ref<{ id: number; nama: string } | null>(null);
+
+function requestDelete(id: number) {
+  const holiday = holidays.value.find((h) => h.id === id);
+  if (!holiday) return;
+  deleteTarget.value = { id: holiday.id, nama: holiday.nama };
+  deleteConfirmOpen.value = true;
+}
+
+async function confirmDelete() {
+  const target = deleteTarget.value;
+  if (!target) return;
+  try {
+    await deleteHolidayMutation.mutateAsync(target.id);
+    toast.success(`Libur "${target.nama}" dihapus.`);
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "Gagal menghapus, coba lagi.");
+  } finally {
+    deleteConfirmOpen.value = false;
+    deleteTarget.value = null;
+  }
 }
 </script>
 
@@ -99,14 +146,14 @@ function confirmTambah() {
         </SidebarGroupContent>
       </SidebarGroup>
       <SidebarSeparator class="mx-0" />
-      <HolidayList :holidays="holidays" />
+      <HolidayList :holidays="holidays" :can-manage="canManage" @delete="requestDelete" />
     </SidebarContent>
-    <SidebarFooter>
+    <SidebarFooter v-if="canManage">
       <Dialog v-model:open="dialogOpen">
         <DialogTrigger as-child>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton @click="openTambah">
+              <SidebarMenuButton>
                 <Plus />
                 <span>Tambah libur</span>
               </SidebarMenuButton>
@@ -133,7 +180,9 @@ function confirmTambah() {
             <p v-if="formError" class="text-sm text-destructive">{{ formError }}</p>
           </div>
           <DialogFooter>
-            <Button @click="submitForm">Simpan</Button>
+            <Button :disabled="createHolidayMutation.isPending.value" @click="submitForm">
+              {{ createHolidayMutation.isPending.value ? "Menyimpan..." : "Simpan" }}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -145,8 +194,25 @@ function confirmTambah() {
             <AlertDialogDescription>{{ nama }} — {{ tanggalMulai }} s/d {{ tanggalAkhir }}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction @click="confirmTambah">Ya, simpan</AlertDialogAction>
+            <AlertDialogCancel :disabled="createHolidayMutation.isPending.value">Batal</AlertDialogCancel>
+            <AlertDialogAction :disabled="createHolidayMutation.isPending.value" @click="confirmTambah">
+              Ya, simpan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog v-model:open="deleteConfirmOpen">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus libur ini?</AlertDialogTitle>
+            <AlertDialogDescription>{{ deleteTarget?.nama }}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel :disabled="deleteHolidayMutation.isPending.value">Batal</AlertDialogCancel>
+            <AlertDialogAction :disabled="deleteHolidayMutation.isPending.value" @click="confirmDelete">
+              Ya, hapus
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

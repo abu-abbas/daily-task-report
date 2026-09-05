@@ -67,3 +67,23 @@ export const createUser = (payload: UserPayload) =>
 
 export const updateUser = (id: number, payload: UserPayload) =>
   api<{ user: AdminUser }>(`/users/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+
+export interface Holiday {
+  id: number;
+  nama: string;
+  tanggalMulai: string;
+  tanggalAkhir: string;
+}
+
+export interface HolidayPayload {
+  nama: string;
+  tanggalMulai: string;
+  tanggalAkhir: string;
+}
+
+export const fetchHolidays = () => api<{ holidays: Holiday[] }>("/holidays");
+
+export const createHoliday = (payload: HolidayPayload) =>
+  api<{ holiday: Holiday }>("/holidays", { method: "POST", body: JSON.stringify(payload) });
+
+export const deleteHoliday = (id: number) => api<void>(`/holidays/${id}`, { method: "DELETE" });
