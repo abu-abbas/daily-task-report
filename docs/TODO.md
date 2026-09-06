@@ -1,6 +1,6 @@
 # Checklist pekerjaan Laporan Harian
 
-Posisi saat ini: dokumentasi, tooling commit, dan [preview layar](stages/00-preview.html) tersedia; aplikasi fungsional belum dibangun. **Stage 0 sedang berjalan:** keputusan dasar dan preview telah diperiksa; [usulan skema](stages/00-review.md) perlu difinalkan sebelum migration.
+Posisi saat ini: aplikasi fungsional sudah berjalan (Bun + Vue 3, backend+frontend nyata, bukan cuma preview). **Stage 1 selesai.** **Stage 2 hampir selesai** — pengelolaan user, project, keanggotaan, dan kalender/libur semuanya end-to-end (backend+frontend+test); tersisa satu kriteria yang baru bisa diverifikasi penuh begitu Stage 3 ada. Lanjut ke Stage 3 (Input Harian).
 
 ## Cara memakai checklist
 
@@ -21,7 +21,7 @@ ADR menjadi sumber keputusan, file stage menjadi sumber kriteria selesai, dan ha
 - [x] Aktifkan hook Conventional Commits dan verifikasi pesan valid/invalid; bukti pada [ADR-0027](adr/0027-hook-conventional-commits.md).
 - [ ] Commit dan push perubahan tooling hook serta dokumentasi setelah siap dikirim. Ini belum dilakukan dan tidak menghalangi rancangan Stage 0.
 
-## Prioritas sekarang — Stage 0
+## Stage 0 (selesai) — arsip keputusan dasar
 
 - [x] Tetapkan kalender bersama oleh admin, pola awal Senin–Jumat, dan blok submit jika kalender belum tersedia — [ADR-0028](adr/0028-pengelolaan-kalender.md).
 - [x] Tetapkan hierarki atasan → banyak supervisi → banyak tenaga ahli — [ADR-0031](adr/0031-hierarki-supervisi.md), menggantikan ADR-0029.
@@ -29,13 +29,13 @@ ADR menjadi sumber keputusan, file stage menjadi sumber kriteria selesai, dan ha
 - [x] Tetapkan Asia/Jakarta, cuti pribadi terpisah, dan tanggal log tersimpan tidak berubah — [ADR-0032](adr/0032-tanggal-bisnis.md). Detail generate ulang dan hitungan nyangkut dilanjutkan pada Stage 2/6.
 - [x] Pastikan supervisi memiliki akun login dan akses laporan tenaga ahli di bawahnya — [ADR-0031](adr/0031-hierarki-supervisi.md).
 - [x] Tetapkan rangkap peran, akses histori berdasarkan hubungan aktif, dan batas hak admin — [ADR-0033](adr/0033-rangkap-peran.md) / [ADR-0034](adr/0034-akses-histori.md). Detail provisioning dan koreksi setelah keluar project dilanjutkan pada Stage 1/2/4.
-- [x] Tetapkan skema fisik final (DDL) dan framework backend sebelum migration — [ADR-0035](adr/0035-backend-framework.md), [ADR-0036](adr/0036-skema-fisik-stage1.md), [ADR-0037](adr/0037-library-frontend-tambahan.md) menutup Q-03. DDL belum dijalankan sebagai migration.
+- [x] Tetapkan skema fisik final (DDL) dan framework backend sebelum migration — [ADR-0035](adr/0035-backend-framework.md), [ADR-0036](adr/0036-skema-fisik-stage1.md), [ADR-0037](adr/0037-library-frontend-tambahan.md) menutup Q-03. Migration sudah dijalankan sejak Stage 1 dan diperbarui lagi di Stage 2 (tabel `holidays` menggantikan `work_calendar`, ADR-0026 revisi).
 - [x] Buat wireframe Input Harian mobile-first beserta keadaan kosong, task dicentang, catatan wajib, kendala, attachment, izin, dan feedback validasi; lihat [bahan review](stages/00-review.md). Belum berupa halaman browser.
 - [x] Lengkapi rancangan Riwayat dan Dashboard; [preview](stages/00-preview.html) lolos 12 kombinasi layar/tema/viewport dan pemeriksaan interaksi dasar. Bukti pada Stage 0.
 - [x] Catat jawaban serta koreksi terbaru di ADR dan perbarui [keputusan terbuka](open-decisions.md). Skema fisik dan rincian tahap berikutnya tetap dipisahkan dari keputusan pengguna.
-- [ ] Selesaikan seluruh kriteria [Stage 0](stages/00-keputusan-desain.md).
+- [x] Selesaikan seluruh kriteria [Stage 0](stages/00-keputusan-desain.md).
 
-Langkah berikutnya: lanjut Stage 2 (user/project/kalender kerja). Rincian kalender/provisioning diselesaikan pada stage terkait; Q-04/Q-05 sebelum fitur edit, sedangkan template Word menunggu Stage 7.
+Langkah berikutnya: lanjut Stage 3 (input harian) — checklist realisasi, kerjaan tambahan, cold start, rencana manual, simpan atomik. Rincian keanggotaan/kalender sudah tuntas di Stage 2, tinggal dipakai. Q-04/Q-05 sebelum fitur edit, sedangkan template Word menunggu Stage 7.
 
 ## Urutan implementasi
 

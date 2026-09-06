@@ -1,6 +1,6 @@
 # Stage 00 — Keputusan dan desain layar
 
-- Status: Berjalan; keputusan dasar dan preview terverifikasi tersedia, finalisasi skema sebelum migration masih tersisa.
+- Status: Selesai — seluruh kriteria terpenuhi, termasuk Q-03 (DDL fisik dan framework backend); migration dan pemeriksaan persistensi menjadi bukti Stage 1.
 - Prasyarat: Tidak ada.
 - Keputusan: [ADR-0001](../adr/0001-stack-typescript.md), [ADR-0002](../adr/0002-database-sqlite.md), [ADR-0003](../adr/0003-login-session.md), [ADR-0004](../adr/0004-hak-akses.md), [ADR-0006](../adr/0006-hari-kerja.md), [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0012](../adr/0012-penutupan-task.md), [ADR-0019](../adr/0019-word-per-tipe.md), [ADR-0021](../adr/0021-komponen-ui.md), [ADR-0022](../adr/0022-arah-visual.md), [ADR-0023](../adr/0023-mobile-first.md), [ADR-0024](../adr/0024-tema.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0026](../adr/0026-kalender-kerja-tahunan.md), [ADR-0035](../adr/0035-backend-framework.md), [ADR-0036](../adr/0036-skema-fisik-stage1.md), [ADR-0037](../adr/0037-library-frontend-tambahan.md).
 
