@@ -2,7 +2,7 @@
 
 - Status: Belum dimulai.
 - Prasyarat: Stage 2 termasuk kalender kerja tahunan; aturan tanggal pada Q-01.
-- Keputusan: [ADR-0006](../adr/0006-hari-kerja.md), [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0010](../adr/0010-task-tanpa-pemilik.md), [ADR-0011](../adr/0011-kolaborasi-task.md), [ADR-0018](../adr/0018-tanpa-approval.md), [ADR-0021](../adr/0021-komponen-ui.md), [ADR-0022](../adr/0022-arah-visual.md), [ADR-0023](../adr/0023-mobile-first.md), [ADR-0024](../adr/0024-tema.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0026](../adr/0026-kalender-kerja-tahunan.md).
+- Keputusan: [ADR-0006](../adr/0006-hari-kerja.md), [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0010](../adr/0010-task-tanpa-pemilik.md), [ADR-0011](../adr/0011-kolaborasi-task.md), [ADR-0018](../adr/0018-tanpa-approval.md), [ADR-0021](../adr/0021-komponen-ui.md), [ADR-0022](../adr/0022-arah-visual.md), [ADR-0023](../adr/0023-mobile-first.md), [ADR-0024](../adr/0024-tema.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0026](../adr/0026-kalender-kerja-tahunan.md), [ADR-0041](../adr/0041-identitas-item-task-log.md).
 
 ## Cakupan
 
@@ -24,7 +24,7 @@
 
 ## Dependensi terbuka
 
-Q-01 serta aturan identitas item/submit pada Q-05. Lihat [daftar keputusan terbuka](../open-decisions.md).
+Q-01 (aturan kalender detail). Identitas item/submit pada Q-05 sudah cukup untuk Stage 3 ([ADR-0041](../adr/0041-identitas-item-task-log.md)); sisanya (edit/koreksi) menyusul Stage 4. Lihat [daftar keputusan terbuka](../open-decisions.md).
 
 ## Bukti pelaksanaan
 
