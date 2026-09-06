@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { toast } from "vue-sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -134,10 +135,6 @@ const ringkasan = computed(() => {
   <div class="grid gap-4 pb-24">
     <div>
       <h1 class="text-lg font-semibold">Input Harian</h1>
-      <p v-if="data" class="text-sm text-muted-foreground">
-        Realisasi untuk {{ formatTanggalPanjang(data.hariKerjaSebelumnya) }}, rencana untuk
-        {{ formatTanggalPanjang(data.tanggal) }}.
-      </p>
     </div>
 
     <p v-if="query.isPending.value" class="text-sm text-muted-foreground">Memuat data...</p>
@@ -146,9 +143,10 @@ const ringkasan = computed(() => {
     <template v-else-if="data">
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Checklist realisasi</CardTitle>
+          <CardTitle class="text-base">Realisasi</CardTitle>
+          <CardDescription>{{ formatTanggalPanjang(data.hariKerjaSebelumnya) }}</CardDescription>
         </CardHeader>
-        <CardContent class="grid gap-3">
+        <CardContent class="grid gap-4">
           <div v-if="checklistEmpty" class="grid gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
             <p>Tidak ada rencana tercatat untuk hari kerja sebelumnya.</p>
             <Button type="button" size="sm" variant="outline" class="justify-self-start" @click="scrollToTambahan">
@@ -187,15 +185,12 @@ const ringkasan = computed(() => {
               </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      <div ref="tambahanSection">
-        <Card>
-          <CardHeader>
-            <CardTitle class="text-base">Kerjaan tambahan</CardTitle>
-          </CardHeader>
-          <CardContent class="grid gap-3">
+          <Separator />
+
+          <div ref="tambahanSection" class="grid gap-3">
+            <h3 class="text-sm font-medium">Kerjaan tambahan</h3>
+
             <div v-if="data.tambahan.length > 0" class="grid gap-2">
               <div v-for="t in data.tambahan" :key="t.taskId" class="rounded-md border p-3 text-sm">
                 <p class="font-medium">{{ t.deskripsi }}</p>
@@ -215,13 +210,14 @@ const ringkasan = computed(() => {
               submit-label="Tambahkan ke draft"
               @add="addTambahan"
             />
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Rencana hari ini</CardTitle>
+          <CardTitle class="text-base">Rencana</CardTitle>
+          <CardDescription>{{ formatTanggalPanjang(data.tanggal) }}</CardDescription>
         </CardHeader>
         <CardContent class="grid gap-3">
           <div v-if="data.rencanaHariIni.length > 0" class="grid gap-2">
