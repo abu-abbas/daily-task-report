@@ -10,6 +10,8 @@ import {
   handleListProjects,
   handleUpdateProject,
 } from "./routes/projects";
+import { handleCreateTask, handleListTasks } from "./routes/tasks";
+import { handleGetTodayInput, handleSaveTodayInput } from "./routes/task-logs";
 
 runMigrations();
 
@@ -34,6 +36,9 @@ Bun.serve({
     "/api/projects/:id/members/:userId": {
       DELETE: (req) => handleEndMembership(req, Number(req.params.id), Number(req.params.userId)),
     },
+    "/api/tasks": { GET: handleListTasks, POST: handleCreateTask },
+    "/api/task-logs/today": { GET: (req) => handleGetTodayInput(req) },
+    "/api/task-logs": { POST: (req) => handleSaveTodayInput(req) },
   },
   fetch() {
     return new Response("Not found", { status: 404 });
