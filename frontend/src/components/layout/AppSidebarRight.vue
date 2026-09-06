@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { DateFormatter, parseDate, today } from "@internationalized/date";
 import { toast } from "vue-sonner";
-import { Moon, Plus, Sun } from "@lucide/vue";
+import { CalendarIcon, Moon, Plus, Sun } from "@lucide/vue";
 import { useTheme } from "@/composables/useTheme";
 import { useMe } from "@/composables/useAuth";
 import { useCreateHoliday, useDeleteHoliday, useHolidaysQuery } from "@/composables/useHolidays";
 import { ApiError } from "@/lib/api";
 import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +59,8 @@ const nama = ref("");
 const tanggalMulai = ref("");
 const tanggalAkhir = ref("");
 const formError = ref<string | null>(null);
+const dateFormatter = new DateFormatter("id-ID", { dateStyle: "long", timeZone: "Asia/Jakarta" });
+const defaultDate = today("Asia/Jakarta");
 
 // DialogTrigger sendiri sudah men-toggle dialogOpen lewat onClick bawaan reka-ui.
 // Kalau di sini juga di-set imperatif lewat @click pada elemen yang sama, kedua handler
@@ -142,14 +146,14 @@ async function confirmDelete() {
     <SidebarContent>
       <SidebarGroup class="px-0">
         <SidebarGroupContent>
-          <Calendar class="bg-sidebar [&_[role=gridcell]]:w-[33px]" />
+          <Calendar class="bg-sidebar **:[[role=gridcell]]:w-8.25" />
         </SidebarGroupContent>
       </SidebarGroup>
       <SidebarSeparator class="mx-0" />
       <HolidayList :holidays="holidays" :can-manage="canManage" @delete="requestDelete" />
     </SidebarContent>
     <SidebarFooter v-if="canManage">
-      <Dialog v-model:open="dialogOpen">
+      <Dialog v-model:open="dialogOpen" :modal="false">
         <DialogTrigger as-child>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -171,11 +175,45 @@ async function confirmDelete() {
             </div>
             <div class="grid gap-2">
               <Label for="holiday-mulai">Tanggal mulai</Label>
-              <Input id="holiday-mulai" v-model="tanggalMulai" type="date" />
+              <Popover v-slot="{ close }">
+                <PopoverTrigger as-child>
+                  <Button id="holiday-mulai" variant="outline" class="justify-start text-left font-normal" :class="{ 'text-muted-foreground': !tanggalMulai }">
+                    <CalendarIcon aria-hidden="true" />
+                    {{ tanggalMulai ? dateFormatter.format(parseDate(tanggalMulai).toDate("Asia/Jakarta")) : "Pilih tanggal mulai" }}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent class="z-[60] w-auto p-0" align="start">
+                  <Calendar
+                    :model-value="tanggalMulai ? parseDate(tanggalMulai) : undefined"
+                    :default-placeholder="defaultDate"
+                    locale="id-ID"
+                    layout="month-and-year"
+                    initial-focus
+                    @update:model-value="(value) => { tanggalMulai = value?.toString() ?? ''; close(); }"
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div class="grid gap-2">
               <Label for="holiday-akhir">Tanggal akhir</Label>
-              <Input id="holiday-akhir" v-model="tanggalAkhir" type="date" />
+              <Popover v-slot="{ close }">
+                <PopoverTrigger as-child>
+                  <Button id="holiday-akhir" variant="outline" class="justify-start text-left font-normal" :class="{ 'text-muted-foreground': !tanggalAkhir }">
+                    <CalendarIcon aria-hidden="true" />
+                    {{ tanggalAkhir ? dateFormatter.format(parseDate(tanggalAkhir).toDate("Asia/Jakarta")) : "Pilih tanggal akhir" }}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent class="z-[60] w-auto p-0" align="start">
+                  <Calendar
+                    :model-value="tanggalAkhir ? parseDate(tanggalAkhir) : undefined"
+                    :default-placeholder="tanggalMulai ? parseDate(tanggalMulai) : defaultDate"
+                    locale="id-ID"
+                    layout="month-and-year"
+                    initial-focus
+                    @update:model-value="(value) => { tanggalAkhir = value?.toString() ?? ''; close(); }"
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <p v-if="formError" class="text-sm text-destructive">{{ formError }}</p>
           </div>
