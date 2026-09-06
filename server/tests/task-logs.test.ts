@@ -125,7 +125,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
     expect(row).toBeNull();
   });
 
-  test("kerjaan tambahan (cold start) berhasil, plus rencana untuk besok", async () => {
+  test("kerjaan tambahan (cold start) berhasil, plus rencana hari ini", async () => {
     const res = await handleSaveTodayInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [

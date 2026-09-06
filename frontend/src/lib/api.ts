@@ -161,7 +161,7 @@ export interface TambahanItem {
   projectNama: string;
 }
 
-export interface RencanaBesokItem {
+export interface RencanaHariIniItem {
   taskId: number;
   deskripsi: string;
   tag: string | null;
@@ -174,7 +174,7 @@ export interface TodayInput {
   hariKerjaSebelumnya: string;
   checklist: ChecklistItem[];
   tambahan: TambahanItem[];
-  rencanaBesok: RencanaBesokItem[];
+  rencanaHariIni: RencanaHariIniItem[];
 }
 
 export const fetchTodayInput = () => api<TodayInput>("/task-logs/today");

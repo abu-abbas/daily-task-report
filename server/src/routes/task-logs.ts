@@ -14,7 +14,9 @@ interface ChecklistRow {
 }
 
 // Checklist realisasi hari ini = rencana milik user pada hari kerja sebelumnya (ADR-0006).
-// Kerjaan tambahan/rencana besok memakai tabel yang sama, dibedakan lewat jenis/is_extra.
+// Rencana yang diisi hari ini bertanggal hari ini juga (tanggal laporan), bukan besok — satu
+// submit boleh berisi realisasi kemarin dan rencana hari ini sekaligus (ADR-0007). Kerjaan
+// tambahan/rencana memakai tabel yang sama, dibedakan lewat jenis/is_extra.
 // tanggalOverride: hanya dipakai test untuk mensimulasikan "hari ini" tertentu tanpa
 // bergantung pada tanggal asli saat test dijalankan. Route asli (index.ts) memanggil tanpa
 // argumen ini, selalu memakai todayJakarta() sungguhan.
@@ -60,7 +62,7 @@ export function handleGetTodayInput(req: Request, tanggalOverride?: string): Res
     )
     .all(ctx.user.id, hariKerjaSebelumnya);
 
-  const rencanaBesok = db
+  const rencanaHariIni = db
     .query<ChecklistRow, [number, string]>(
       `SELECT tl.task_id AS taskId, t.deskripsi, t.tag, t.project_id AS projectId, p.nama AS projectNama
        FROM task_logs tl
@@ -71,7 +73,7 @@ export function handleGetTodayInput(req: Request, tanggalOverride?: string): Res
     )
     .all(ctx.user.id, tanggal);
 
-  return json({ tanggal, hariKerjaSebelumnya, checklist, tambahan, rencanaBesok });
+  return json({ tanggal, hariKerjaSebelumnya, checklist, tambahan, rencanaHariIni });
 }
 
 const logItemSchema = z

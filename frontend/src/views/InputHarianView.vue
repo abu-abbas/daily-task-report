@@ -221,11 +221,11 @@ const ringkasan = computed(() => {
 
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Rencana besok</CardTitle>
+          <CardTitle class="text-base">Rencana hari ini</CardTitle>
         </CardHeader>
         <CardContent class="grid gap-3">
-          <div v-if="data.rencanaBesok.length > 0" class="grid gap-2">
-            <div v-for="r in data.rencanaBesok" :key="r.taskId" class="rounded-md border p-3 text-sm">
+          <div v-if="data.rencanaHariIni.length > 0" class="grid gap-2">
+            <div v-for="r in data.rencanaHariIni" :key="r.taskId" class="rounded-md border p-3 text-sm">
               <p class="font-medium">{{ r.deskripsi }}</p>
               <p class="text-xs text-muted-foreground">{{ r.projectNama }}</p>
             </div>
@@ -252,7 +252,7 @@ const ringkasan = computed(() => {
             <AlertDialogTitle>Simpan input harian ini?</AlertDialogTitle>
             <AlertDialogDescription>
               {{ ringkasan.realisasi }} realisasi, {{ ringkasan.tambahan }} kerjaan tambahan,
-              {{ ringkasan.rencana }} rencana besok akan disimpan.
+              {{ ringkasan.rencana }} rencana hari ini akan disimpan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
