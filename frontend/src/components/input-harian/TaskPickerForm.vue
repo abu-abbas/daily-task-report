@@ -96,25 +96,23 @@ function submit() {
         </SelectContent>
       </Select>
 
-      <div class="flex gap-1 text-sm">
-        <Button
+      <div class="flex rounded-full bg-muted p-1 text-sm">
+        <button
           type="button"
-          size="sm"
-          :variant="mode === 'existing' ? 'default' : 'outline'"
-          class="flex-1"
+          class="flex-1 rounded-full px-3 py-1 font-medium transition-colors"
+          :class="mode === 'existing' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'"
           @click="mode = 'existing'"
         >
           Task terbuka
-        </Button>
-        <Button
+        </button>
+        <button
           type="button"
-          size="sm"
-          :variant="mode === 'new' ? 'default' : 'outline'"
-          class="flex-1"
+          class="flex-1 rounded-full px-3 py-1 font-medium transition-colors"
+          :class="mode === 'new' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'"
           @click="mode = 'new'"
         >
           Task baru
-        </Button>
+        </button>
       </div>
     </div>
 
