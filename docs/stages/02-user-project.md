@@ -1,6 +1,6 @@
 # Stage 02 — User, project, dan kalender kerja
 
-- Status: Berjalan — pengelolaan user, kalender/libur, project, dan keanggotaan semuanya selesai dan teruji. Tersisa satu kriteria yang baru bisa diverifikasi penuh begitu Stage 3 (pencatatan kerja) ada.
+- Status: Selesai — pengelolaan user, kalender/libur, project, dan keanggotaan semuanya selesai dan teruji; kedua kriteria yang sebelumnya menunggu Stage 3 kini terverifikasi lewat endpoint pencatatan yang sudah ada.
 - Prasyarat: Stage 1.
 - Keputusan: [ADR-0004](../adr/0004-hak-akses.md), [ADR-0005](../adr/0005-project-keanggotaan.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0026](../adr/0026-kalender-kerja-tahunan.md), [ADR-0040](../adr/0040-import-project-gitlab.md).
 
@@ -15,9 +15,9 @@
 ## Kriteria selesai dan pemeriksaan
 
 - [x] Admin dapat mengelola data yang diperlukan untuk input harian — user, project, keanggotaan, dan kalender/libur (lihat bukti).
-- [ ] Tenaga ahli tidak dapat mencatat pekerjaan pada project di luar keanggotaannya, termasuk lewat request langsung. Aturannya sendiri sudah diekstrak jadi `isActiveProjectMember(userId, projectId)` (`server/src/routes/projects.ts`) dan teruji terpisah (4 test: anggota aktif, bukan anggota, sudah keluar, project tak ada) — begitu Stage 3 membangun endpoint pencatatan, tinggal panggil fungsi ini, bukan menulis ulang logic keanggotaan. Yang belum bisa diuji cuma pemasangannya di endpoint pencatatan itu sendiri, karena endpoint-nya belum ada.
+- [x] Tenaga ahli tidak dapat mencatat pekerjaan pada project di luar keanggotaannya, termasuk lewat request langsung. `isActiveProjectMember(userId, projectId)` (`server/src/routes/projects.ts`) kini benar-benar dipasang di endpoint pencatatan Stage 3 (`POST /api/tasks`, `GET /api/tasks`, `POST /api/task-logs`) dan teruji lewat request langsung (403) di `server/tests/tasks.test.ts` dan `server/tests/task-logs.test.ts`.
 - [x] Perubahan keanggotaan mengikuti kebijakan riwayat yang sudah dirinci, tanpa menghilangkan histori secara tidak sengaja. Keluar-masuk project pakai `ended_at`, bukan hapus baris; bergabung ulang mengaktifkan baris lama (teruji, tidak menggandakan riwayat) sesuai ADR-0034.
-- [ ] Hari libur dapat diatur admin (rentang tanggal) dan dipakai bersama aturan default mingguan untuk penelusuran hari kerja sebelumnya, termasuk lintas tahun. Pengelolaan datanya (CRUD) sudah selesai (lihat bukti); pemakaian nyata untuk penelusuran hari kerja sebelumnya menyusul saat Stage 3 dibangun.
+- [x] Hari libur dapat diatur admin (rentang tanggal) dan dipakai bersama aturan default mingguan untuk penelusuran hari kerja sebelumnya, termasuk lintas tahun. Pemakaian nyatanya adalah `isWorkday()`/`previousWorkday()` di `server/src/kalender.ts` (Stage 3), teruji lintas tahun dan lintas hari libur beruntun di `server/tests/kalender.test.ts`.
 
 ## Dependensi terbuka
 

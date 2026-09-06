@@ -123,3 +123,72 @@ export const addProjectMember = (projectId: number, userId: number) =>
 
 export const endProjectMembership = (projectId: number, userId: number) =>
   api<{ project: Project }>(`/projects/${projectId}/members/${userId}`, { method: "DELETE" });
+
+export interface Task {
+  id: number;
+  projectId: number;
+  deskripsi: string;
+  tag: string | null;
+  status: "open" | "closed";
+}
+
+export const fetchTasks = (projectId: number) => api<{ tasks: Task[] }>(`/tasks?projectId=${projectId}`);
+
+export interface NewTaskPayload {
+  projectId: number;
+  deskripsi: string;
+  tag?: string;
+}
+
+export const createTask = (payload: NewTaskPayload) =>
+  api<{ task: Task }>("/tasks", { method: "POST", body: JSON.stringify(payload) });
+
+export interface ChecklistItem {
+  taskId: number;
+  deskripsi: string;
+  tag: string | null;
+  projectId: number;
+  projectNama: string;
+  realisasiCatatan: string | null;
+}
+
+export interface TambahanItem {
+  taskId: number;
+  catatan: string | null;
+  deskripsi: string;
+  tag: string | null;
+  projectId: number;
+  projectNama: string;
+}
+
+export interface RencanaBesokItem {
+  taskId: number;
+  deskripsi: string;
+  tag: string | null;
+  projectId: number;
+  projectNama: string;
+}
+
+export interface TodayInput {
+  tanggal: string;
+  hariKerjaSebelumnya: string;
+  checklist: ChecklistItem[];
+  tambahan: TambahanItem[];
+  rencanaBesok: RencanaBesokItem[];
+}
+
+export const fetchTodayInput = () => api<TodayInput>("/task-logs/today");
+
+export interface SaveTaskLogItem {
+  taskId?: number;
+  newTask?: NewTaskPayload;
+  jenis: "rencana" | "realisasi";
+  catatan?: string;
+  isExtra?: boolean;
+}
+
+export const saveTodayInput = (items: SaveTaskLogItem[]) =>
+  api<{ tanggal: string; hariKerjaSebelumnya: string }>("/task-logs", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
