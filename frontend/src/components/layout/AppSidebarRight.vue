@@ -153,7 +153,7 @@ async function confirmDelete() {
       <HolidayList :holidays="holidays" :can-manage="canManage" @delete="requestDelete" />
     </SidebarContent>
     <SidebarFooter v-if="canManage">
-      <Dialog v-model:open="dialogOpen" :modal="false">
+      <Dialog v-model:open="dialogOpen">
         <DialogTrigger as-child>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -182,7 +182,7 @@ async function confirmDelete() {
                     {{ tanggalMulai ? dateFormatter.format(parseDate(tanggalMulai).toDate("Asia/Jakarta")) : "Pilih tanggal mulai" }}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent class="z-[60] w-auto p-0" align="start">
+                <PopoverContent class="z-60 w-auto p-0" align="start">
                   <Calendar
                     :model-value="tanggalMulai ? parseDate(tanggalMulai) : undefined"
                     :default-placeholder="defaultDate"
@@ -203,7 +203,7 @@ async function confirmDelete() {
                     {{ tanggalAkhir ? dateFormatter.format(parseDate(tanggalAkhir).toDate("Asia/Jakarta")) : "Pilih tanggal akhir" }}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent class="z-[60] w-auto p-0" align="start">
+                <PopoverContent class="z-60 w-auto p-0" align="start">
                   <Calendar
                     :model-value="tanggalAkhir ? parseDate(tanggalAkhir) : undefined"
                     :default-placeholder="tanggalMulai ? parseDate(tanggalMulai) : defaultDate"
