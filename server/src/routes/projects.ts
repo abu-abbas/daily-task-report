@@ -40,6 +40,20 @@ function getProjectRow(id: number): ProjectRow | null {
   return db.query<ProjectRow, [number]>("SELECT id, nama, is_active FROM projects WHERE id = ?").get(id);
 }
 
+// Aturan inti ADR-0005: tenaga ahli hanya boleh bertindak (mencatat pekerjaan, dst.) pada
+// project yang keanggotaannya aktif (ended_at NULL). Diekspor supaya endpoint pencatatan
+// kerja (Stage 3) memanggil fungsi ini langsung alih-alih menulis ulang query yang sama —
+// satu sumber kebenaran untuk "boleh/tidak boleh", bukan logic yang gampang lupa dipasang
+// di satu endpoint tertentu.
+export function isActiveProjectMember(userId: number, projectId: number): boolean {
+  const row = db
+    .query<{ user_id: number }, [number, number]>(
+      "SELECT user_id FROM user_project WHERE user_id = ? AND project_id = ? AND ended_at IS NULL",
+    )
+    .get(userId, projectId);
+  return row !== null;
+}
+
 const projectPayloadSchema = z.object({
   nama: z.string().min(1, "Nama wajib diisi."),
   isActive: z.boolean(),

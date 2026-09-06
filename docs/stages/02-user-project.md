@@ -15,7 +15,7 @@
 ## Kriteria selesai dan pemeriksaan
 
 - [x] Admin dapat mengelola data yang diperlukan untuk input harian — user, project, keanggotaan, dan kalender/libur (lihat bukti).
-- [ ] Tenaga ahli tidak dapat mencatat pekerjaan pada project di luar keanggotaannya, termasuk lewat request langsung. `GET /api/projects/mine` sudah memfilter berdasarkan keanggotaan aktif (siap dipakai Stage 3); pembatasan pada pencatatan kerja itu sendiri baru bisa diuji begitu endpoint pencatatan (Stage 3) ada.
+- [ ] Tenaga ahli tidak dapat mencatat pekerjaan pada project di luar keanggotaannya, termasuk lewat request langsung. Aturannya sendiri sudah diekstrak jadi `isActiveProjectMember(userId, projectId)` (`server/src/routes/projects.ts`) dan teruji terpisah (4 test: anggota aktif, bukan anggota, sudah keluar, project tak ada) — begitu Stage 3 membangun endpoint pencatatan, tinggal panggil fungsi ini, bukan menulis ulang logic keanggotaan. Yang belum bisa diuji cuma pemasangannya di endpoint pencatatan itu sendiri, karena endpoint-nya belum ada.
 - [x] Perubahan keanggotaan mengikuti kebijakan riwayat yang sudah dirinci, tanpa menghilangkan histori secara tidak sengaja. Keluar-masuk project pakai `ended_at`, bukan hapus baris; bergabung ulang mengaktifkan baris lama (teruji, tidak menggandakan riwayat) sesuai ADR-0034.
 - [ ] Hari libur dapat diatur admin (rentang tanggal) dan dipakai bersama aturan default mingguan untuk penelusuran hari kerja sebelumnya, termasuk lintas tahun. Pengelolaan datanya (CRUD) sudah selesai (lihat bukti); pemakaian nyata untuk penelusuran hari kerja sebelumnya menyusul saat Stage 3 dibangun.
 

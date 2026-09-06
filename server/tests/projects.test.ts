@@ -17,6 +17,7 @@ const {
   handleUpdateProject,
   handleAddMember,
   handleEndMembership,
+  isActiveProjectMember,
 } = await import("../src/routes/projects");
 
 const ADMIN_EMAIL = "admin.projects@example.test";
@@ -159,6 +160,50 @@ describe("Keanggotaan project", () => {
       )
       .get(tenagaId, projectId);
     expect(rows?.count).toBe(1);
+  });
+});
+
+// Aturan penolakan pencatatan di luar keanggotaan (ADR-0005) diuji di sini terlepas dari
+// endpoint pencatatan kerja itu sendiri yang baru dibangun Stage 3 — begitu endpoint itu ada,
+// tinggal panggil fungsi ini, tidak menulis ulang query keanggotaan.
+describe("isActiveProjectMember", () => {
+  let projectId: number;
+
+  beforeAll(async () => {
+    const res = await handleCreateProject(
+      req("POST", "/api/projects", adminToken, { nama: "Cek Keanggotaan", isActive: true }),
+    );
+    const body = (await res.json()) as { project: { id: number } };
+    projectId = body.project.id;
+    await handleAddMember(
+      req("POST", `/api/projects/${projectId}/members`, adminToken, { userId: tenagaId }),
+      projectId,
+    );
+  });
+
+  test("true untuk anggota aktif", () => {
+    expect(isActiveProjectMember(tenagaId, projectId)).toBe(true);
+  });
+
+  test("false untuk user yang bukan anggota project itu", async () => {
+    const res = await handleCreateProject(
+      req("POST", "/api/projects", adminToken, { nama: "Project Lain", isActive: true }),
+    );
+    const body = (await res.json()) as { project: { id: number } };
+    expect(isActiveProjectMember(tenagaId, body.project.id)).toBe(false);
+  });
+
+  test("false setelah keluar project (ended_at terisi)", async () => {
+    await handleEndMembership(
+      req("DELETE", `/api/projects/${projectId}/members/${tenagaId}`, adminToken),
+      projectId,
+      tenagaId,
+    );
+    expect(isActiveProjectMember(tenagaId, projectId)).toBe(false);
+  });
+
+  test("false untuk project yang tidak ada", () => {
+    expect(isActiveProjectMember(tenagaId, 999999)).toBe(false);
   });
 });
 
