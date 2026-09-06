@@ -4,9 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // DATABASE_PATH harus di-set sebelum src/db di-import (module top-level membaca env sekali).
+// Paksa timpa (bukan ??=): kalau server/.env kebetulan sudah men-set DATABASE_PATH, biarpun
+// itu dimuat otomatis oleh Bun sebelum baris ini jalan, test tetap wajib pakai db temp sendiri
+// — bukan diam-diam jatuh ke db development beneran.
 // "../src/db" adalah singleton ESM yang dibagi lintas file test dalam satu proses "bun test",
 // jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini.
-process.env.DATABASE_PATH ??= join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
+process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
 const { db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");

@@ -1,8 +1,8 @@
 import { db } from "./db";
 import type { AuthContext, Role, User } from "./types";
 
-const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 hari
-export const SESSION_COOKIE = "session";
+const SESSION_DURATION_MS = Number(process.env.SESSION_DURATION_MS ?? 7 * 24 * 60 * 60 * 1000); // default 7 hari
+export const SESSION_COOKIE = process.env.SESSION_COOKIE ?? "session";
 
 function randomToken(): string {
   const bytes = new Uint8Array(32);

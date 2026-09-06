@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { DateFormatter, parseDate, today } from "@internationalized/date";
 import { toast } from "vue-sonner";
+import { LOCALE, TIMEZONE } from "@/lib/locale";
 import { CalendarIcon, Moon, Plus, Sun } from "@lucide/vue";
 import { useTheme } from "@/composables/useTheme";
 import { useMe } from "@/composables/useAuth";
@@ -59,8 +60,8 @@ const nama = ref("");
 const tanggalMulai = ref("");
 const tanggalAkhir = ref("");
 const formError = ref<string | null>(null);
-const dateFormatter = new DateFormatter("id-ID", { dateStyle: "long", timeZone: "Asia/Jakarta" });
-const defaultDate = today("Asia/Jakarta");
+const dateFormatter = new DateFormatter(LOCALE, { dateStyle: "long", timeZone: TIMEZONE });
+const defaultDate = today(TIMEZONE);
 
 // DialogTrigger sendiri sudah men-toggle dialogOpen lewat onClick bawaan reka-ui.
 // Kalau di sini juga di-set imperatif lewat @click pada elemen yang sama, kedua handler
@@ -179,14 +180,14 @@ async function confirmDelete() {
                 <PopoverTrigger as-child>
                   <Button id="holiday-mulai" variant="outline" class="justify-start text-left font-normal" :class="{ 'text-muted-foreground': !tanggalMulai }">
                     <CalendarIcon aria-hidden="true" />
-                    {{ tanggalMulai ? dateFormatter.format(parseDate(tanggalMulai).toDate("Asia/Jakarta")) : "Pilih tanggal mulai" }}
+                    {{ tanggalMulai ? dateFormatter.format(parseDate(tanggalMulai).toDate(TIMEZONE)) : "Pilih tanggal mulai" }}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent class="z-60 w-auto p-0" align="start">
                   <Calendar
                     :model-value="tanggalMulai ? parseDate(tanggalMulai) : undefined"
                     :default-placeholder="defaultDate"
-                    locale="id-ID"
+                    :locale="LOCALE"
                     layout="month-and-year"
                     initial-focus
                     @update:model-value="(value) => { tanggalMulai = value?.toString() ?? ''; close(); }"
@@ -200,14 +201,14 @@ async function confirmDelete() {
                 <PopoverTrigger as-child>
                   <Button id="holiday-akhir" variant="outline" class="justify-start text-left font-normal" :class="{ 'text-muted-foreground': !tanggalAkhir }">
                     <CalendarIcon aria-hidden="true" />
-                    {{ tanggalAkhir ? dateFormatter.format(parseDate(tanggalAkhir).toDate("Asia/Jakarta")) : "Pilih tanggal akhir" }}
+                    {{ tanggalAkhir ? dateFormatter.format(parseDate(tanggalAkhir).toDate(TIMEZONE)) : "Pilih tanggal akhir" }}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent class="z-60 w-auto p-0" align="start">
                   <Calendar
                     :model-value="tanggalAkhir ? parseDate(tanggalAkhir) : undefined"
                     :default-placeholder="tanggalMulai ? parseDate(tanggalMulai) : defaultDate"
-                    locale="id-ID"
+                    :locale="LOCALE"
                     layout="month-and-year"
                     initial-focus
                     @update:model-value="(value) => { tanggalAkhir = value?.toString() ?? ''; close(); }"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Check, ChevronRight, Trash2 } from "@lucide/vue";
+import { LOCALE } from "@/lib/locale";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   SidebarGroup,
@@ -27,9 +28,9 @@ const hariIni = new Date().toISOString().slice(0, 10);
 
 function formatRentang(h: Holiday): string {
   const opt: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
-  const mulai = new Date(h.tanggalMulai).toLocaleDateString("id-ID", opt);
+  const mulai = new Date(h.tanggalMulai).toLocaleDateString(LOCALE, opt);
   if (h.tanggalMulai === h.tanggalAkhir) return mulai;
-  const akhir = new Date(h.tanggalAkhir).toLocaleDateString("id-ID", opt);
+  const akhir = new Date(h.tanggalAkhir).toLocaleDateString(LOCALE, opt);
   return `${mulai} – ${akhir}`;
 }
 
@@ -62,7 +63,7 @@ const kelompok = computed(() => [
                 <SidebarMenuButton>
                   <div
                     :data-active="index === 0"
-                    class="group/holiday-item flex aspect-square size-4 shrink-0 items-center justify-center rounded-[4px] border border-input data-[active=true]:border-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
+                    class="group/holiday-item flex aspect-square size-4 shrink-0 items-center justify-center rounded-lg border border-input data-[active=true]:border-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
                   >
                     <Check class="hidden size-3.5 group-data-[active=true]/holiday-item:block" />
                   </div>

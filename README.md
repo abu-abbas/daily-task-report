@@ -6,21 +6,24 @@ Mulai dari [checklist pekerjaan](docs/TODO.md) untuk melihat progres dan langkah
 
 Rancangan layar dapat dibuka di browser melalui [preview Stage 0](docs/stages/00-preview.html). Tersedia contoh mobile/desktop dan light/dark mode; data tidak disimpan.
 
-Stage 1 (fondasi aplikasi dan akses) selesai; lihat [bukti pelaksanaan](docs/stages/01-fondasi-akses.md). Stage 2 (user, project, kalender kerja) berikutnya. Ikuti ADR yang diterima dan ponytail full saat mengerjakan setiap stage.
+Stage 1 (fondasi aplikasi dan akses) selesai; lihat [bukti pelaksanaan](docs/stages/01-fondasi-akses.md). Stage 2 (user, project, kalender kerja) hampir selesai — lihat [checklist](docs/TODO.md) untuk detail. Ikuti ADR yang diterima dan ponytail full saat mengerjakan setiap stage.
 
-## Menjalankan aplikasi (Stage 1)
+## Menjalankan aplikasi
 
 Prasyarat: Bun terpasang.
 
 ```sh
-bun install --frozen-lockfile   # sekali di root — workspaces meng-install frontend & server
+bun install --frozen-lockfile           # sekali di root — workspaces meng-install frontend & server
 
-bun run migrate                 # jalankan migration ke data/app.db
-bun run dev:server              # terminal 1 — backend di :3001
-bun run dev:frontend            # terminal 2 — frontend di :5173, proxy /api ke backend
+cp server/.env.example server/.env      # sesuaikan kalau perlu (PORT, DATABASE_PATH, dst.)
+cp frontend/.env.example frontend/.env  # locale/timezone tampilan (ADR-0032)
+
+bun run migrate                         # jalankan migration ke data/app.db
+bun run dev:server                      # terminal 1 — backend di :3001
+bun run dev:frontend                    # terminal 2 — frontend di :5173, proxy /api ke backend
 ```
 
-Buka `http://localhost:5173`. Login butuh user dengan `password_hash` terisi; belum ada halaman registrasi/seed otomatis (admin/provisioning menyusul Stage 2).
+Buka `http://localhost:5173`. Login butuh user dengan `password_hash` terisi; belum ada halaman registrasi/seed otomatis, jadi user pertama (admin) dibuat manual langsung ke `data/app.db` (hash password dengan `Bun.password.hash`, lalu insert ke tabel `users`/`user_roles`). Setelah itu, pengelolaan user selanjutnya lewat halaman Kelola User (`/admin/users`).
 
 ## Setup hook commit
 
