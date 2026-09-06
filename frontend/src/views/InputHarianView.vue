@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import TaskPickerForm from "@/components/input-harian/TaskPickerForm.vue";
 import { ApiError, type SaveTaskLogItem } from "@/lib/api";
+import { formatTanggalPanjang } from "@/lib/locale";
 import { useSaveTodayInput, useTodayInputQuery } from "@/composables/useTaskLogs";
 
 const query = useTodayInputQuery();
@@ -134,7 +135,8 @@ const ringkasan = computed(() => {
     <div>
       <h1 class="text-lg font-semibold">Input Harian</h1>
       <p v-if="data" class="text-sm text-muted-foreground">
-        Realisasi untuk {{ data.hariKerjaSebelumnya }}, rencana untuk {{ data.tanggal }}.
+        Realisasi untuk {{ formatTanggalPanjang(data.hariKerjaSebelumnya) }}, rencana untuk
+        {{ formatTanggalPanjang(data.tanggal) }}.
       </p>
     </div>
 
