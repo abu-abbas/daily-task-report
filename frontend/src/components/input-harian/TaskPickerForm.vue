@@ -96,19 +96,19 @@ function submit() {
         </SelectContent>
       </Select>
 
-      <div class="flex rounded-full bg-muted p-1 text-sm">
+      <div class="flex rounded-lg bg-muted p-1 text-sm">
         <button
           type="button"
-          class="flex-1 rounded-full px-3 py-1 font-medium transition-colors"
-          :class="mode === 'existing' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'"
+          class="flex-1 rounded-md px-3 py-1 font-medium transition-colors"
+          :class="mode === 'existing' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'"
           @click="mode = 'existing'"
         >
           Task terbuka
         </button>
         <button
           type="button"
-          class="flex-1 rounded-full px-3 py-1 font-medium transition-colors"
-          :class="mode === 'new' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'"
+          class="flex-1 rounded-md px-3 py-1 font-medium transition-colors"
+          :class="mode === 'new' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'"
           @click="mode = 'new'"
         >
           Task baru
