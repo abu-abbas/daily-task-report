@@ -87,3 +87,39 @@ export const createHoliday = (payload: HolidayPayload) =>
   api<{ holiday: Holiday }>("/holidays", { method: "POST", body: JSON.stringify(payload) });
 
 export const deleteHoliday = (id: number) => api<void>(`/holidays/${id}`, { method: "DELETE" });
+
+export interface ProjectMember {
+  id: number;
+  nama: string;
+}
+
+export interface Project {
+  id: number;
+  nama: string;
+  isActive: boolean;
+  members: ProjectMember[];
+}
+
+export interface ProjectPayload {
+  nama: string;
+  isActive: boolean;
+}
+
+export const fetchProjects = () => api<{ projects: Project[] }>("/projects");
+
+export const fetchMyProjects = () => api<{ projects: Project[] }>("/projects/mine");
+
+export const createProject = (payload: ProjectPayload) =>
+  api<{ project: Project }>("/projects", { method: "POST", body: JSON.stringify(payload) });
+
+export const updateProject = (id: number, payload: ProjectPayload) =>
+  api<{ project: Project }>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+
+export const addProjectMember = (projectId: number, userId: number) =>
+  api<{ project: Project }>(`/projects/${projectId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+
+export const endProjectMembership = (projectId: number, userId: number) =>
+  api<{ project: Project }>(`/projects/${projectId}/members/${userId}`, { method: "DELETE" });

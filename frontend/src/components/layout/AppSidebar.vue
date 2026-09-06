@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { ClipboardList, History, ShieldCheck, X } from "@lucide/vue";
+import { ClipboardList, FolderKanban, History, ShieldCheck, X } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/composables/useAuth";
+import { useMyProjectsQuery } from "@/composables/useProjects";
 import WorkspaceSwitcher from "@/components/layout/nav/WorkspaceSwitcher.vue";
-import NavProjectPicks from "@/components/layout/nav/NavProjectPicks.vue";
 import NavProjects from "@/components/layout/nav/NavProjects.vue";
 import SidebarUserMenu from "@/components/layout/nav/SidebarUserMenu.vue";
 import {
@@ -22,15 +22,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-// Data contoh sementara — diganti data project sungguhan saat halaman Kelola project (Stage 2) siap.
-const projects = ref([
-  { nama: "Sistem Laporan Harian", anggota: ["Agus Prasetyo", "Maya Puspita"], aktif: true },
-  { nama: "Migrasi Data Legacy", anggota: ["Budi Santoso"], aktif: true },
-  { nama: "Portal Internal", anggota: ["Maya Puspita"], aktif: false },
-]);
-const pinnedProjects = ref(
-  projects.value.map((p) => ({ nama: p.nama, aktif: p.aktif })).slice(0, 2),
-);
+const myProjectsQuery = useMyProjectsQuery();
+const projects = computed(() => myProjectsQuery.data.value?.projects ?? []);
 
 const route = useRoute();
 const me = useMe();
@@ -72,7 +65,6 @@ const { isMobile, setOpenMobile } = useSidebar();
     </SidebarHeader>
 
     <SidebarContent>
-      <NavProjectPicks :projects="pinnedProjects" />
       <NavProjects :projects="projects" />
 
       <SidebarGroup v-if="me.data.value?.user.roles.includes('admin')">
@@ -83,6 +75,14 @@ const { isMobile, setOpenMobile } = useSidebar();
               <RouterLink to="/admin/users">
                 <ShieldCheck />
                 <span>Kelola user</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton as-child :is-active="route.name === 'admin-projects'" class="h-11 md:h-8" @click="setOpenMobile(false)">
+              <RouterLink to="/admin/projects">
+                <FolderKanban />
+                <span>Kelola project</span>
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>

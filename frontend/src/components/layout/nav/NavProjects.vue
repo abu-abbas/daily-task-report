@@ -13,14 +13,9 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
+import type { Project } from "@/lib/api";
 
-// Data contoh sementara — diganti data project sungguhan saat halaman Kelola project (Stage 2) siap.
-interface ProjectPreview {
-  nama: string;
-  anggota: string[];
-}
-
-defineProps<{ projects: ProjectPreview[] }>();
+defineProps<{ projects: Project[] }>();
 </script>
 
 <template>
@@ -28,7 +23,7 @@ defineProps<{ projects: ProjectPreview[] }>();
     <SidebarGroupLabel>Project</SidebarGroupLabel>
     <SidebarGroupContent>
       <SidebarMenu>
-        <Collapsible v-for="project in projects" :key="project.nama">
+        <Collapsible v-for="project in projects" :key="project.id">
           <SidebarMenuItem>
             <SidebarMenuButton>
               <FolderKanban />
@@ -41,10 +36,13 @@ defineProps<{ projects: ProjectPreview[] }>();
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub>
-                <SidebarMenuSubItem v-for="nama in project.anggota" :key="nama">
+                <SidebarMenuSubItem v-for="member in project.members" :key="member.id">
                   <SidebarMenuSubButton as-child>
-                    <span>{{ nama }}</span>
+                    <span>{{ member.nama }}</span>
                   </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem v-if="project.members.length === 0">
+                  <span class="px-2 text-xs text-muted-foreground">Belum ada anggota</span>
                 </SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>

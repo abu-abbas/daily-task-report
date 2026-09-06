@@ -1,6 +1,6 @@
 # Stage 02 — User, project, dan kalender kerja
 
-- Status: Berjalan — pengelolaan user (CRUD, peran, hierarki) dan kalender/libur selesai dan teruji; project serta keanggotaan belum dikerjakan.
+- Status: Berjalan — pengelolaan user, kalender/libur, project, dan keanggotaan semuanya selesai dan teruji. Tersisa satu kriteria yang baru bisa diverifikasi penuh begitu Stage 3 (pencatatan kerja) ada.
 - Prasyarat: Stage 1.
 - Keputusan: [ADR-0004](../adr/0004-hak-akses.md), [ADR-0005](../adr/0005-project-keanggotaan.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0026](../adr/0026-kalender-kerja-tahunan.md), [ADR-0040](../adr/0040-import-project-gitlab.md).
 
@@ -14,9 +14,9 @@
 
 ## Kriteria selesai dan pemeriksaan
 
-- [ ] Admin dapat mengelola data yang diperlukan untuk input harian. Bagian user dan kalender/libur selesai (lihat bukti); project dan keanggotaan masih tersisa.
-- [ ] Tenaga ahli tidak dapat mencatat pekerjaan pada project di luar keanggotaannya, termasuk lewat request langsung.
-- [ ] Perubahan keanggotaan mengikuti kebijakan riwayat yang sudah dirinci, tanpa menghilangkan histori secara tidak sengaja.
+- [x] Admin dapat mengelola data yang diperlukan untuk input harian — user, project, keanggotaan, dan kalender/libur (lihat bukti).
+- [ ] Tenaga ahli tidak dapat mencatat pekerjaan pada project di luar keanggotaannya, termasuk lewat request langsung. `GET /api/projects/mine` sudah memfilter berdasarkan keanggotaan aktif (siap dipakai Stage 3); pembatasan pada pencatatan kerja itu sendiri baru bisa diuji begitu endpoint pencatatan (Stage 3) ada.
+- [x] Perubahan keanggotaan mengikuti kebijakan riwayat yang sudah dirinci, tanpa menghilangkan histori secara tidak sengaja. Keluar-masuk project pakai `ended_at`, bukan hapus baris; bergabung ulang mengaktifkan baris lama (teruji, tidak menggandakan riwayat) sesuai ADR-0034.
 - [ ] Hari libur dapat diatur admin (rentang tanggal) dan dipakai bersama aturan default mingguan untuk penelusuran hari kerja sebelumnya, termasuk lintas tahun. Pengelolaan datanya (CRUD) sudah selesai (lihat bukti); pemakaian nyata untuk penelusuran hari kerja sebelumnya menyusul saat Stage 3 dibangun.
 
 ## Dependensi terbuka
@@ -33,4 +33,7 @@ Kebijakan keanggotaan pada Q-02 dan rincian pengelolaan kalender pada Q-01. Liha
 - **Test otomatis**: `server/tests/holidays.test.ts` (10 test) — otorisasi baca (401, tapi tenaga ahli tetap boleh baca), otorisasi tulis (403 non-admin), create sukses, rentang tanggal terbalik, format tanggal tidak ISO, muncul di daftar, delete sukses, delete ganda (404). Total 26 test lolos bersama `users.test.ts`/`auth.test.ts`.
 - **Frontend**: `AppSidebarRight.vue` memakai `useHolidaysQuery`/`useCreateHoliday`/`useDeleteHoliday` (`composables/useHolidays.ts`) menggantikan fixture; tombol "Tambah libur" dan aksi hapus per item hanya tampil untuk admin (`canManage`), keduanya lewat `AlertDialog` konfirmasi lebih dulu. Diverifikasi end-to-end: tambah lewat form tersimpan ke SQLite dan muncul di daftar, hapus lewat UI benar-benar mengirim `DELETE` (dilacak lewat trace jaringan) dan hilang dari database.
 - **Bug ditemukan dan diperbaiki selama verifikasi** (ketahuan karena diuji lewat browser sungguhan, bukan cuma typecheck/build): (1) dialog "Tambah libur" langsung tertutup sendiri setelah terbuka karena `SidebarMenuButton` di dalam `DialogTrigger as-child` punya `@click` sendiri yang balapan dengan `onClick` toggle bawaan `DialogTrigger`; diperbaiki dengan memindahkan reset form ke `watch(dialogOpen)` alih-alih menimpa langsung di handler klik. (2) Tombol hapus tidak pernah benar-benar memanggil API karena `deleteTarget` (data yang mau dihapus) di-null-kan lewat event tutup dialog yang jalan lebih dulu daripada handler konfirmasi; diperbaiki dengan memisahkan state buka/tutup dialog (`deleteConfirmOpen`) dari data target hapus (`deleteTarget`), sama seperti pola form tambah yang sudah benar.
-- **Belum dikerjakan**: pengelolaan project dan keanggotaan (`user_project`) — masih fixture di sidebar, backend menyusul.
+- **Backend project & keanggotaan**: `GET/POST /api/projects`, `PUT /api/projects/:id` (admin), `GET /api/projects/mine` (siapa pun login, difilter keanggotaan aktif — dasar untuk kriteria "tidak bisa mencatat di luar keanggotaan" pada Stage 3), `POST /api/projects/:id/members` dan `DELETE /api/projects/:id/members/:userId` (`server/src/routes/projects.ts`). Bergabung lagi setelah pernah keluar mengaktifkan ulang baris `user_project` lama (`ended_at = NULL`), bukan bikin baris baru — sesuai ADR-0034 (histori tidak boleh hilang/ganda). Keluar project meng-set `ended_at`, tidak menghapus baris.
+- **Test otomatis**: `server/tests/projects.test.ts` (11 test) — otorisasi baca/tulis, create, tambah anggota, anggota dobel (409), muncul di `/mine`, keluar project, keluar dua kali (404), bergabung ulang tidak menggandakan baris (dicek langsung ke tabel), project tidak ditemukan (404). Total 37 test lolos bersama file lainnya.
+- **Frontend**: halaman baru `AdminProjectsView.vue` (route `/admin/projects`, link "Kelola project" di nav Administrasi) — tabel project dengan status aktif/nonaktif dan badge anggota, dialog tambah/ubah project, dialog terpisah "Kelola anggota" (tambah lewat `Select` user yang belum jadi anggota, hapus per anggota), semuanya lewat `AlertDialog` konfirmasi dan `composables/useProjects.ts` (TanStack Query). Sidebar kiri (`NavProjects.vue`) sekarang menampilkan project sungguhan milik user yang login (`/api/projects/mine`), bukan fixture; bagian "Project pilihan" (favorit) dihapus karena tidak ada model datanya di backend — bukan fitur yang diminta, cuma sisa adaptasi block sidebar-15 yang tidak proporsional dipertahankan sebagai data palsu.
+- **Diverifikasi end-to-end** lewat UI nyata: buat project → tambah anggota (muncul di tabel dan di sidebar kiri milik user tsb) → keluarkan anggota (hilang dari keduanya) → dicek toast, tabel, dan langsung ke SQLite di setiap langkah.

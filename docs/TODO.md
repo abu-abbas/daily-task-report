@@ -40,7 +40,7 @@ Langkah berikutnya: lanjut Stage 2 (user/project/kalender kerja). Rincian kalend
 ## Urutan implementasi
 
 - [x] **[Stage 1 — Fondasi dan akses](stages/01-fondasi-akses.md):** Selesai — setup aplikasi, migration, login/session, dan layout dasar (mobile/laptop, kedua tema) terverifikasi (lihat bukti pelaksanaan).
-- [ ] **[Stage 2 — User, project, kalender](stages/02-user-project.md):** pengelolaan user/anggota/project dan kalender kerja tahunan, termasuk penelusuran lintas tahun.
+- [ ] **[Stage 2 — User, project, kalender](stages/02-user-project.md):** Hampir selesai — pengelolaan user, project, keanggotaan, dan kalender/libur semuanya sudah end-to-end (backend+frontend+test); tersisa satu kriteria (pembatasan pencatatan di luar keanggotaan) yang baru bisa diverifikasi penuh begitu Stage 3 ada.
 - [ ] **[Stage 3 — Input harian](stages/03-input-harian.md):** checklist realisasi, kerjaan tambahan, cold start, rencana manual, dan simpan atomik. Rinci identitas item/submit pada Q-05 sebelum membangun penyimpanan.
 - [ ] **[Stage 4 — Koreksi, izin, penutupan](stages/04-koreksi-izin-penutupan.md):** edit/backdate, cegah duplikasi, konflik izin/realisasi, serta penutupan dengan deskripsi opsional. Selesaikan Q-04/Q-05 yang relevan.
 - [ ] **[Stage 5 — Kendala, attachment, riwayat](stages/05-kendala-attachment-riwayat.md):** resolve kendala, upload gambar tervalidasi, akses file, serta detail laporan per tanggal.

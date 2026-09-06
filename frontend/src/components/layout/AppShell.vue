@@ -12,7 +12,9 @@ const pageTitle = computed(() => ({
   input: "Input harian",
   riwayat: "Riwayat",
   "admin-users": "Kelola user",
+  "admin-projects": "Kelola project",
 }[String(route.name)] ?? "Ruang kerja"));
+const isAdminRoute = computed(() => String(route.name).startsWith("admin-"));
 </script>
 
 <template>
@@ -27,7 +29,7 @@ const pageTitle = computed(() => ({
         <Separator orientation="vertical" class="mr-2 data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-center" />
         <nav aria-label="Breadcrumb" class="min-w-0 text-sm">
           <ol class="flex min-w-0 items-center gap-2">
-            <li class="hidden text-muted-foreground md:block">{{ route.name === 'admin-users' ? 'Administrasi' : 'Laporan' }}</li>
+            <li class="hidden text-muted-foreground md:block">{{ isAdminRoute ? 'Administrasi' : 'Laporan' }}</li>
             <li class="hidden md:block"><ChevronRight class="size-3.5 text-muted-foreground" aria-hidden="true" /></li>
             <li aria-current="page" class="truncate">{{ pageTitle }}</li>
           </ol>
