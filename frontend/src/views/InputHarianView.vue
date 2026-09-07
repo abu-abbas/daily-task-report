@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
-import { Plus } from "@lucide/vue";
+import { parseDate } from "@internationalized/date";
+import { CalendarIcon, Plus } from "@lucide/vue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
@@ -23,14 +28,53 @@ import TaskPickerForm from "@/components/input-harian/TaskPickerForm.vue";
 import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
 import MiniMarkdownEditor from "@/components/input-harian/MiniMarkdownEditor.vue";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
-import { ApiError, type SaveTaskLogItem } from "@/lib/api";
+import { ApiError, type IzinJenis, type SaveTaskLogItem } from "@/lib/api";
+import { groupByProject } from "@/lib/groupByProject";
 import { formatTanggalPanjang } from "@/lib/locale";
-import { useSaveTodayInput, useTodayInputQuery } from "@/composables/useTaskLogs";
+import { useCancelLeave, useDailyInputQuery, useSaveDailyInput, useSaveLeave } from "@/composables/useTaskLogs";
 
+const route = useRoute();
 const router = useRouter();
-const query = useTodayInputQuery();
-const saveMutation = useSaveTodayInput();
+
+// Tanggal laporan (ADR-0044) — dibaca dari query string supaya linkable, sinkron dua arah
+// lewat router.replace saat date-input berubah. null = biarkan server tentukan "hari ini".
+const selectedTanggal = ref<string | null>(typeof route.query.tanggal === "string" ? route.query.tanggal : null);
+
+// Sinkron balik dari route ke state lokal — perlu kalau navigasi ?tanggal= datang dari LUAR
+// komponen ini (mis. klik kalender di sidebar kanan lewat router.push), bukan cuma dari
+// date-input sendiri; tanpa ini query tetap pakai tanggal lama walau URL sudah berubah.
+watch(
+  () => route.query.tanggal,
+  (v) => {
+    selectedTanggal.value = typeof v === "string" ? v : null;
+  },
+);
+
+const query = useDailyInputQuery(selectedTanggal);
+const saveMutation = useSaveDailyInput();
+const saveLeaveMutation = useSaveLeave();
+const cancelLeaveMutation = useCancelLeave();
 const data = computed(() => query.data.value);
+const isSaving = computed(
+  () => saveMutation.isPending.value || saveLeaveMutation.isPending.value || cancelLeaveMutation.isPending.value,
+);
+
+const tanggalDisplay = computed({
+  get: () => selectedTanggal.value ?? data.value?.tanggal ?? "",
+  set: (v: string) => {
+    if (!v) return;
+    selectedTanggal.value = v;
+    router.replace({ query: { ...route.query, tanggal: v } });
+  },
+});
+const minTanggal = computed(() => (data.value ? `${data.value.hariIni.slice(0, 7)}-01` : undefined));
+const maxTanggal = computed(() => data.value?.hariIni);
+
+// Calendar shadcn-vue (bukan <input type="date"> native) — konsisten dengan pola date-picker
+// lain di app ini (form tanggal libur admin, kalender sidebar kanan).
+const tanggalCalendarValue = computed(() => (tanggalDisplay.value ? parseDate(tanggalDisplay.value) : undefined));
+const minTanggalValue = computed(() => (minTanggal.value ? parseDate(minTanggal.value) : undefined));
+const maxTanggalValue = computed(() => (maxTanggal.value ? parseDate(maxTanggal.value) : undefined));
 
 interface ChecklistDraft {
   checked: boolean;
@@ -52,9 +96,11 @@ watch(
 );
 
 const checklistEmpty = computed(() => (data.value?.checklist.length ?? 0) === 0);
+const tambahanGroups = computed(() => groupByProject(data.value?.tambahan ?? []));
+const rencanaGroups = computed(() => groupByProject(data.value?.rencanaHariIni ?? []));
 
 // Dipakai TaskPickerForm buat isi ulang catatan saat task yang sudah tersimpan hari ini dipilih
-// lagi lewat "Task terbuka" — cegah submit ulang menimpa catatan lama (mis. todo-list checklist)
+// lagi lewat "Task terbuka" — cegah submit ulang menimpa catatan lama (mis. checklist todo-list)
 // jadi hilang, karena simpan itu replace, bukan gabung (ADR-0043).
 function catatanByTaskId(items: { taskId: number; catatan: string | null }[] | undefined): Record<number, string> {
   const map: Record<number, string> = {};
@@ -73,6 +119,13 @@ interface DraftItem {
 let draftKeySeq = 0;
 const tambahanDrafts = ref<DraftItem[]>([]);
 const rencanaDrafts = ref<DraftItem[]>([]);
+
+// Ganti tanggal laporan = draft yang sedang disusun tidak lagi relevan (ditujukan buat tanggal
+// sebelumnya) — dibuang alih-alih ikut nyantol ke tanggal baru saat simpan.
+watch(selectedTanggal, () => {
+  tambahanDrafts.value = [];
+  rencanaDrafts.value = [];
+});
 
 function draftLabel(d: DraftItem): string {
   return d.newTask ? d.newTask.deskripsi : `Task #${d.taskId}`;
@@ -95,6 +148,27 @@ function removeTambahan(key: number) {
 function removeRencana(key: number) {
   rencanaDrafts.value = rencanaDrafts.value.filter((d) => d.key !== key);
 }
+
+// Izin/cuti/sakit (ADR-0013/0044) — toggle menyembunyikan form rencana tanggal ini, diganti
+// form izin. Realisasi & kerjaan tambahan hari kerja sebelumnya (card "Realisasi") tetap tampil
+// apa adanya, tidak terpengaruh toggle ini.
+const izinAktif = ref(false);
+const izinJenis = ref<IzinJenis>("cuti");
+const izinAlasan = ref("");
+
+watch(
+  data,
+  (d) => {
+    izinAktif.value = d?.izin != null;
+    izinJenis.value = d?.izin?.jenis ?? "cuti";
+    izinAlasan.value = d?.izin?.alasan ?? "";
+  },
+  { immediate: true },
+);
+
+watch(izinAktif, (aktif) => {
+  if (aktif) rencanaDrafts.value = [];
+});
 
 const checklistInvalid = computed(() =>
   (data.value?.checklist ?? []).some((item) => {
@@ -120,13 +194,24 @@ const itemsToSave = computed<SaveTaskLogItem[]>(() => {
   return items;
 });
 
-const canSave = computed(() => itemsToSave.value.length > 0 && !checklistInvalid.value);
+const izinSebelumnya = computed(() => data.value?.izin != null);
+const canSave = computed(
+  () => (itemsToSave.value.length > 0 || izinAktif.value || izinSebelumnya.value) && !checklistInvalid.value,
+);
 
 const confirmOpen = ref(false);
 
 async function confirmSave() {
+  const tanggal = data.value!.tanggal;
   try {
-    await saveMutation.mutateAsync(itemsToSave.value);
+    if (izinAktif.value) {
+      await saveLeaveMutation.mutateAsync({ tanggal, jenis: izinJenis.value, alasan: izinAlasan.value.trim() || undefined });
+    } else if (izinSebelumnya.value) {
+      await cancelLeaveMutation.mutateAsync(tanggal);
+    }
+    if (itemsToSave.value.length > 0) {
+      await saveMutation.mutateAsync({ tanggal, items: itemsToSave.value });
+    }
     toast.success("Input harian tersimpan.");
     tambahanDrafts.value = [];
     rencanaDrafts.value = [];
@@ -147,6 +232,12 @@ const ringkasan = computed(() => {
     rencana: rencanaDrafts.value.length,
   };
 });
+
+// Simpan izin menghapus rencana yang sudah tersimpan di tanggal ini (ADR-0044) — user perlu
+// lihat peringatan ini dulu di dialog konfirmasi, jangan sampai kaget rencananya hilang diam-diam.
+const rencanaTersimpanAkanDihapus = computed(() =>
+  izinAktif.value ? (data.value?.rencanaHariIni.length ?? 0) : 0,
+);
 </script>
 
 <template>
@@ -159,6 +250,30 @@ const ringkasan = computed(() => {
     <p v-else-if="query.isError.value" class="text-sm text-destructive">Gagal memuat data, coba muat ulang.</p>
 
     <template v-else-if="data">
+      <!-- lg:hidden: di layar besar kalender sidebar kanan (AppSidebarRight, "hidden lg:flex")
+           sudah jadi cara pilih tanggal laporan, field ini jadi ganda. Di mobile sidebar itu
+           disembunyikan, jadi field ini tetap satu-satunya cara pilih tanggal di sana. -->
+      <div class="grid w-fit gap-1.5 lg:hidden">
+        <label for="tanggal-laporan" class="text-xs font-medium text-muted-foreground">Tanggal laporan</label>
+        <Popover v-slot="{ close }">
+          <PopoverTrigger as-child>
+            <Button id="tanggal-laporan" variant="outline" class="justify-start text-left font-normal">
+              <CalendarIcon aria-hidden="true" />
+              {{ formatTanggalPanjang(tanggalDisplay) }}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent class="w-auto p-0" align="start">
+            <Calendar
+              :model-value="tanggalCalendarValue"
+              :min-value="minTanggalValue"
+              :max-value="maxTanggalValue"
+              initial-focus
+              @update:model-value="(value) => { if (value) tanggalDisplay = value.toString(); close(); }"
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle class="text-base">Realisasi</CardTitle>
@@ -210,10 +325,12 @@ const ringkasan = computed(() => {
             <h3 class="text-sm font-medium">Kerjaan tambahan</h3>
 
             <div v-if="data.tambahan.length > 0" class="grid gap-2">
-              <div v-for="t in data.tambahan" :key="t.taskId" class="grid gap-1 rounded-md border p-3 text-sm">
-                <ProjectBadge :nama="t.projectNama" class="justify-self-start" />
-                <p class="font-medium">{{ t.deskripsi }}</p>
-                <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
+              <div v-for="group in tambahanGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
+                <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
+                <div v-for="t in group.items" :key="t.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
+                  <p class="font-medium">{{ t.deskripsi }}</p>
+                  <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
+                </div>
               </div>
             </div>
 
@@ -251,42 +368,68 @@ const ringkasan = computed(() => {
 
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Rencana</CardTitle>
+          <CardTitle class="text-base">{{ izinAktif ? "Izin" : "Rencana" }}</CardTitle>
           <CardDescription>{{ formatTanggalPanjang(data.tanggal) }}</CardDescription>
         </CardHeader>
         <CardContent class="grid gap-3">
-          <div v-if="data.rencanaHariIni.length > 0" class="grid gap-2">
-            <div v-for="r in data.rencanaHariIni" :key="r.taskId" class="grid gap-1 rounded-md border p-3 text-sm">
-              <ProjectBadge :nama="r.projectNama" class="justify-self-start" />
-              <p class="font-medium">{{ r.deskripsi }}</p>
-              <MiniMarkdownText v-if="r.catatan" :text="r.catatan" class="text-xs text-muted-foreground" />
-            </div>
+          <label class="flex items-start gap-2 text-sm">
+            <Checkbox :model-value="izinAktif" @update:model-value="(v) => (izinAktif = v === true)" />
+            <span class="grid gap-0.5">
+              <span class="font-medium">Izin / tidak masuk tanggal laporan</span>
+              <span class="text-xs text-muted-foreground">Realisasi hari kerja sebelumnya tetap bisa diisi.</span>
+            </span>
+          </label>
+
+          <div v-if="izinAktif" class="grid gap-2">
+            <Select v-model="izinJenis">
+              <SelectTrigger class="w-full">
+                <SelectValue placeholder="Jenis" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cuti">Cuti</SelectItem>
+                <SelectItem value="sakit">Sakit</SelectItem>
+                <SelectItem value="izin">Izin</SelectItem>
+              </SelectContent>
+            </Select>
+            <Textarea v-model="izinAlasan" placeholder="Alasan (opsional)" rows="2" />
           </div>
 
-          <div v-if="rencanaDrafts.length > 0" class="grid gap-2">
-            <div v-for="d in rencanaDrafts" :key="d.key" class="flex items-center justify-between rounded-md border p-3 text-sm">
-              <span>{{ draftLabel(d) }}</span>
-              <Button variant="ghost" size="sm" @click="removeRencana(d.key)">Hapus</Button>
+          <template v-else>
+            <div v-if="data.rencanaHariIni.length > 0" class="grid gap-2">
+              <div v-for="group in rencanaGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
+                <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
+                <div v-for="r in group.items" :key="r.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
+                  <p class="font-medium">{{ r.deskripsi }}</p>
+                  <MiniMarkdownText v-if="r.catatan" :text="r.catatan" class="text-xs text-muted-foreground" />
+                </div>
+              </div>
             </div>
-          </div>
 
-          <Dialog v-model:open="rencanaDialogOpen">
-            <DialogTrigger as-child>
-              <Button type="button" size="sm" variant="outline" class="justify-self-start">
-                <Plus class="mr-1 size-4" />
-                Tambah rencana
-              </Button>
-            </DialogTrigger>
-            <DialogContent class="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Tambah rencana</DialogTitle>
-              </DialogHeader>
-              <TaskPickerForm
-                :existing-catatan-by-task-id="rencanaCatatanByTaskId"
-                @add="addRencana"
-              />
-            </DialogContent>
-          </Dialog>
+            <div v-if="rencanaDrafts.length > 0" class="grid gap-2">
+              <div v-for="d in rencanaDrafts" :key="d.key" class="flex items-center justify-between rounded-md border p-3 text-sm">
+                <span>{{ draftLabel(d) }}</span>
+                <Button variant="ghost" size="sm" @click="removeRencana(d.key)">Hapus</Button>
+              </div>
+            </div>
+
+            <Dialog v-model:open="rencanaDialogOpen">
+              <DialogTrigger as-child>
+                <Button type="button" size="sm" variant="outline" class="justify-self-start">
+                  <Plus class="mr-1 size-4" />
+                  Tambah rencana
+                </Button>
+              </DialogTrigger>
+              <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Tambah rencana</DialogTitle>
+                </DialogHeader>
+                <TaskPickerForm
+                  :existing-catatan-by-task-id="rencanaCatatanByTaskId"
+                  @add="addRencana"
+                />
+              </DialogContent>
+            </Dialog>
+          </template>
         </CardContent>
       </Card>
 
@@ -299,14 +442,19 @@ const ringkasan = computed(() => {
           <AlertDialogHeader>
             <AlertDialogTitle>Simpan input harian ini?</AlertDialogTitle>
             <AlertDialogDescription>
-              {{ ringkasan.realisasi }} realisasi, {{ ringkasan.tambahan }} kerjaan tambahan,
-              {{ ringkasan.rencana }} rencana hari ini akan disimpan.
+              {{ ringkasan.realisasi }} realisasi dicentang, {{ ringkasan.tambahan }} kerjaan tambahan baru,
+              {{ ringkasan.rencana }} rencana baru hari ini<span v-if="izinAktif">, ditambah status izin</span>
+              akan disimpan. Item yang sudah tersimpan sebelumnya tidak dihitung ulang di sini.
             </AlertDialogDescription>
+            <p v-if="rencanaTersimpanAkanDihapus > 0" class="text-sm text-destructive">
+              {{ rencanaTersimpanAkanDihapus }} rencana yang sudah tersimpan di tanggal ini akan terhapus karena izin
+              diaktifkan.
+            </p>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel :disabled="saveMutation.isPending.value">Batal</AlertDialogCancel>
-            <AlertDialogAction :disabled="saveMutation.isPending.value" @click="confirmSave">
-              {{ saveMutation.isPending.value ? "Menyimpan..." : "Ya, simpan" }}
+            <AlertDialogCancel :disabled="isSaving">Batal</AlertDialogCancel>
+            <AlertDialogAction :disabled="isSaving" @click="confirmSave">
+              {{ isSaving ? "Menyimpan..." : "Ya, simpan" }}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -184,15 +184,29 @@ export interface RencanaHariIniItem {
   projectNama: string;
 }
 
-export interface TodayInput {
+export type IzinJenis = "cuti" | "sakit" | "izin";
+
+export interface Izin {
+  jenis: IzinJenis;
+  alasan: string | null;
+}
+
+export interface DailyInput {
   tanggal: string;
+  hariIni: string;
   hariKerjaSebelumnya: string;
   checklist: ChecklistItem[];
   tambahan: TambahanItem[];
   rencanaHariIni: RencanaHariIniItem[];
+  izin: Izin | null;
 }
 
-export const fetchTodayInput = () => api<TodayInput>("/task-logs/today");
+// tanggal kosong = hari ini (server yang tentukan, ADR-0032) — dipakai buat muat awal
+// sebelum date-picker tahu batas bulan berjalan (data.hariIni).
+export const fetchDailyInput = (tanggal?: string) => {
+  const query = tanggal ? `?tanggal=${tanggal}` : "";
+  return api<DailyInput>(`/task-logs/daily${query}`);
+};
 
 // projectBaru (bukan projectId): project usulan "Lainnya" dibuat dalam transaksi simpan yang
 // sama dengan task-nya (ADR-0042) — bukan lebih dulu secara terpisah, supaya draft yang belum
@@ -212,8 +226,19 @@ export interface SaveTaskLogItem {
   isExtra?: boolean;
 }
 
-export const saveTodayInput = (items: SaveTaskLogItem[]) =>
+export const saveDailyInput = (tanggal: string, items: SaveTaskLogItem[]) =>
   api<{ tanggal: string; hariKerjaSebelumnya: string }>("/task-logs", {
     method: "POST",
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ tanggal, items }),
   });
+
+// ADR-0044: izin/cuti/sakit per tanggal, endpoint terpisah dari task-logs (leaves punya siklus
+// hidup sendiri — bukan bagian dari itemsToSave harian).
+export const saveLeave = (payload: { tanggal: string; jenis: IzinJenis; alasan?: string }) =>
+  api<{ tanggal: string; jenis: IzinJenis; alasan: string | null }>("/leaves", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const cancelLeave = (tanggal: string) =>
+  api<{ tanggal: string }>(`/leaves/${tanggal}`, { method: "DELETE" });

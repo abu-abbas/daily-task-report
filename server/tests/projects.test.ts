@@ -25,7 +25,7 @@ const {
   isActiveProjectMember,
 } = await import("../src/routes/projects");
 
-// Usulan "Lainnya" (ADR-0042) dibuat oleh handleSaveTodayInput (task-logs), bukan endpoint di
+// Usulan "Lainnya" (ADR-0042) dibuat oleh handleSaveDailyInput (task-logs), bukan endpoint di
 // modul ini — untuk test konfirmasi/gabung di sini, project usulan disiapkan langsung ke DB.
 function createPendingProject(nama: string, memberUserId: number): number {
   const result = db
@@ -237,7 +237,7 @@ describe("PUT /api/projects/:id", () => {
 });
 
 // ADR-0042: opsi "Lainnya" pada input harian — usulan project dengan keanggotaan otomatis,
-// dibuat oleh handleSaveTodayInput (lihat server/tests/task-logs.test.ts), direkonsiliasi
+// dibuat oleh handleSaveDailyInput (lihat server/tests/task-logs.test.ts), direkonsiliasi
 // admin di sini lewat konfirmasi atau digabung ke project existing.
 describe("POST /api/projects/:id/konfirmasi", () => {
   let usulanId: number;

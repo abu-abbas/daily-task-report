@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { DateFormatter, parseDate, today } from "@internationalized/date";
+import { useRoute, useRouter } from "vue-router";
+import { DateFormatter, parseDate, startOfMonth, today, type DateValue } from "@internationalized/date";
 import { toast } from "vue-sonner";
 import { LOCALE, TIMEZONE } from "@/lib/locale";
 import { CalendarIcon, Moon, Plus, Sun } from "@lucide/vue";
@@ -62,6 +63,22 @@ const tanggalAkhir = ref("");
 const formError = ref<string | null>(null);
 const dateFormatter = new DateFormatter(LOCALE, { dateStyle: "long", timeZone: TIMEZONE });
 const defaultDate = today(TIMEZONE);
+
+// Kalender bulanan di sidebar (ADR-0044) — klik tanggal buka laporan tanggal itu di /input,
+// bukan cuma dekorasi. Dibatasi bulan berjalan, sama seperti date-picker di InputHarianView.
+const router = useRouter();
+const route = useRoute();
+const minReportDate = startOfMonth(defaultDate);
+
+const selectedReportDate = computed<DateValue>(() => {
+  const tanggal = typeof route.query.tanggal === "string" ? route.query.tanggal : null;
+  return tanggal ? parseDate(tanggal) : defaultDate;
+});
+
+function bukaLaporanTanggal(value: DateValue | undefined) {
+  if (!value) return;
+  router.push({ path: "/input", query: { tanggal: value.toString() } });
+}
 
 // DialogTrigger sendiri sudah men-toggle dialogOpen lewat onClick bawaan reka-ui.
 // Kalau di sini juga di-set imperatif lewat @click pada elemen yang sama, kedua handler
@@ -147,7 +164,13 @@ async function confirmDelete() {
     <SidebarContent>
       <SidebarGroup class="px-0">
         <SidebarGroupContent>
-          <Calendar class="bg-sidebar **:[[role=gridcell]]:w-8.25" />
+          <Calendar
+            class="bg-sidebar **:[[role=gridcell]]:w-8.25"
+            :model-value="selectedReportDate"
+            :min-value="minReportDate"
+            :max-value="defaultDate"
+            @update:model-value="bukaLaporanTanggal"
+          />
         </SidebarGroupContent>
       </SidebarGroup>
       <SidebarSeparator class="mx-0" />

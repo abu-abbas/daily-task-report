@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
 import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
-import { previousWorkday, todayJakarta } from "../kalender";
+import { dalamBulanBerjalan, previousWorkday, realisasiTanggalDiizinkan, todayJakarta } from "../kalender";
 import { isActiveProjectMember } from "./projects";
 
 interface ChecklistRow {
@@ -13,19 +13,30 @@ interface ChecklistRow {
   projectNama: string;
 }
 
+const TANGGAL_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 // Checklist realisasi hari ini = rencana milik user pada hari kerja sebelumnya (ADR-0006).
 // Rencana yang diisi hari ini bertanggal hari ini juga (tanggal laporan), bukan besok — satu
 // submit boleh berisi realisasi kemarin dan rencana hari ini sekaligus (ADR-0007). Kerjaan
 // tambahan/rencana memakai tabel yang sama, dibedakan lewat jenis/is_extra.
-// tanggalOverride: hanya dipakai test untuk mensimulasikan "hari ini" tertentu tanpa
+// hariIniOverride: hanya dipakai test untuk mensimulasikan "hari ini" tertentu tanpa
 // bergantung pada tanggal asli saat test dijalankan. Route asli (index.ts) memanggil tanpa
-// argumen ini, selalu memakai todayJakarta() sungguhan.
-export function handleGetTodayInput(req: Request, tanggalOverride?: string): Response {
+// argumen ini, selalu memakai todayJakarta() sungguhan. tanggal (laporan yang dilihat/diisi)
+// datang dari klien lewat query string — bisa backdate dalam bulan berjalan (ADR-0008/0009).
+export function handleGetDailyInput(req: Request, hariIniOverride?: string): Response {
   const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
   const ctx = getAuthContext(token);
   if (!ctx) return errorResponse(401, "Belum login.");
 
-  const tanggal = tanggalOverride ?? todayJakarta();
+  const hariIni = hariIniOverride ?? todayJakarta();
+  const tanggalParam = new URL(req.url).searchParams.get("tanggal");
+  if (tanggalParam !== null && !TANGGAL_RE.test(tanggalParam)) {
+    return errorResponse(400, "Format tanggal tidak valid.");
+  }
+  const tanggal = tanggalParam ?? hariIni;
+  if (!dalamBulanBerjalan(tanggal, hariIni)) {
+    return errorResponse(400, "Tanggal laporan di luar bulan berjalan.");
+  }
   const hariKerjaSebelumnya = previousWorkday(tanggal);
 
   const checklistRows = db
@@ -73,7 +84,13 @@ export function handleGetTodayInput(req: Request, tanggalOverride?: string): Res
     )
     .all(ctx.user.id, tanggal);
 
-  return json({ tanggal, hariKerjaSebelumnya, checklist, tambahan, rencanaHariIni });
+  const izin = db
+    .query<{ jenis: "cuti" | "sakit" | "izin"; alasan: string | null }, [number, string]>(
+      "SELECT jenis, alasan FROM leaves WHERE user_id = ? AND tanggal = ?",
+    )
+    .get(ctx.user.id, tanggal);
+
+  return json({ tanggal, hariIni, hariKerjaSebelumnya, checklist, tambahan, rencanaHariIni, izin: izin ?? null });
 }
 
 // projectBaru (bukan projectId): usulan project "Lainnya" (ADR-0042) dibuat di saveItem()
@@ -104,6 +121,7 @@ const logItemSchema = z
   });
 
 const saveInputSchema = z.object({
+  tanggal: z.string().regex(TANGGAL_RE).optional(),
   items: z.array(logItemSchema).min(1, "Minimal satu item."),
 });
 
@@ -143,7 +161,26 @@ function upsertTaskLog(
   }
 }
 
-export async function handleSaveTodayInput(req: Request, tanggalOverride?: string): Promise<Response> {
+// ADR-0030 + ADR-0014: null kalau boleh lanjut, Response kalau harus ditolak.
+function validasiRealisasiDiizinkan(
+  userId: number,
+  tanggal: string,
+  hariIni: string,
+  hariKerjaSebelumnya: string,
+): Response | null {
+  if (!realisasiTanggalDiizinkan(tanggal, hariIni)) {
+    return errorResponse(400, "Realisasi hari kerja sebelumnya sudah di luar batas edit.");
+  }
+  const izinBentrok = db
+    .query<{ id: number }, [number, string]>("SELECT id FROM leaves WHERE user_id = ? AND tanggal = ?")
+    .get(userId, hariKerjaSebelumnya);
+  if (izinBentrok) {
+    return errorResponse(409, "Tanggal itu sudah tercatat sebagai izin/cuti/sakit, realisasi tidak bisa diisi.");
+  }
+  return null;
+}
+
+export async function handleSaveDailyInput(req: Request, hariIniOverride?: string): Promise<Response> {
   const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
   const ctx = getAuthContext(token);
   if (!ctx) return errorResponse(401, "Belum login.");
@@ -152,8 +189,18 @@ export async function handleSaveTodayInput(req: Request, tanggalOverride?: strin
   const parsed = saveInputSchema.safeParse(body);
   if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
 
-  const tanggal = tanggalOverride ?? todayJakarta();
+  const hariIni = hariIniOverride ?? todayJakarta();
+  const tanggal = parsed.data.tanggal ?? hariIni;
+  if (!dalamBulanBerjalan(tanggal, hariIni)) {
+    return errorResponse(400, "Tanggal laporan di luar bulan berjalan.");
+  }
   const hariKerjaSebelumnya = previousWorkday(tanggal);
+
+  const adaRealisasi = parsed.data.items.some((item) => item.jenis === "realisasi");
+  if (adaRealisasi) {
+    const gagal = validasiRealisasiDiizinkan(ctx.user.id, tanggal, hariIni, hariKerjaSebelumnya);
+    if (gagal) return gagal;
+  }
 
   // Validasi seluruh item DULU sebelum menulis apa pun — kegagalan satu bagian tidak boleh
   // menyisakan simpan parsial (cakupan Stage 3). projectBaru dilewati di sini: project dan
@@ -169,6 +216,22 @@ export async function handleSaveTodayInput(req: Request, tanggalOverride?: strin
       return errorResponse(403, "Bukan anggota aktif project ini.");
     }
   }
+
+  // Efek uncheck (ADR-0044): item checklist realisasi yang tadinya tersimpan tapi sekarang
+  // tidak lagi ada di items (di-uncheck) dihapus, bukan dibiarkan nyangkut. Cuma untuk item
+  // checklist (is_extra=0) — kerjaan tambahan/rencana lain di luar cakupan ini.
+  const checklistTaskIds = db
+    .query<{ taskId: number }, [number, string]>(
+      "SELECT task_id AS taskId FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'rencana'",
+    )
+    .all(ctx.user.id, hariKerjaSebelumnya)
+    .map((r) => r.taskId);
+  const checkedTaskIds = new Set(
+    parsed.data.items
+      .filter((item) => item.jenis === "realisasi" && !item.isExtra && item.taskId !== undefined)
+      .map((item) => item.taskId!),
+  );
+  const uncheckedTaskIds = checklistTaskIds.filter((id) => !checkedTaskIds.has(id));
 
   // ADR-0042: usulan "Lainnya" dibuat di sini, dalam transaksi yang sama dengan task & log-nya
   // (bukan lebih dulu lewat endpoint terpisah) — supaya project baru tidak pernah nyantol tanpa
@@ -201,6 +264,12 @@ export async function handleSaveTodayInput(req: Request, tanggalOverride?: strin
 
   db.transaction(() => {
     for (const item of parsed.data.items) saveItem(item);
+    if (uncheckedTaskIds.length > 0) {
+      const placeholders = uncheckedTaskIds.map(() => "?").join(",");
+      db.query(
+        `DELETE FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'realisasi' AND is_extra = 0 AND task_id IN (${placeholders})`,
+      ).run(ctx!.user.id, hariKerjaSebelumnya, ...uncheckedTaskIds);
+    }
   })();
 
   return json({ tanggal, hariKerjaSebelumnya });

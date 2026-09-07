@@ -58,3 +58,23 @@ export function previousWorkday(tanggal: string): string {
   }
   throw new Error(`Tidak menemukan hari kerja sebelum ${tanggal} dalam 400 hari.`);
 }
+
+function firstOfMonth(tanggal: string): string {
+  return `${tanggal.slice(0, 7)}-01`;
+}
+
+// ADR-0008: laporan terlewat cuma boleh diisi/dikoreksi dalam bulan berjalan (relatif hari
+// ini sungguhan, bukan tanggal yang sedang dilihat) — bukan izin backdate tanpa batas.
+export function dalamBulanBerjalan(tanggal: string, hariIni: string): boolean {
+  return tanggal >= firstOfMonth(hariIni) && tanggal <= hariIni;
+}
+
+// ADR-0030: hari kerja terakhir bulan lalu boleh diisi/dikoreksi HANYA pada hari kerja
+// pertama bulan baru — persis saat tanggal laporan yang dipilih = hari ini sungguhan, bukan
+// backdate ke tanggal awal bulan itu kapan pun setelahnya ("memilih tanggal formulir awal
+// bulan pada hari berikutnya tidak membuka kembali pengecualian").
+export function realisasiTanggalDiizinkan(tanggalLaporan: string, hariIni: string): boolean {
+  const hariKerjaSebelumnya = previousWorkday(tanggalLaporan);
+  if (hariKerjaSebelumnya >= firstOfMonth(hariIni)) return true;
+  return tanggalLaporan === hariIni;
+}

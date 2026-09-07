@@ -1,6 +1,6 @@
 # Checklist pekerjaan Laporan Harian
 
-Posisi saat ini: aplikasi fungsional sudah berjalan (Bun + Vue 3, backend+frontend nyata, bukan cuma preview). **Stage 1 selesai. Stage 2 selesai. Stage 3 (Input Harian) selesai** — checklist realisasi, kerjaan tambahan, cold start, rencana manual, dan simpan atomik sudah end-to-end (backend+frontend+test) dan terverifikasi di browser. Lanjut ke Stage 4 (Koreksi, izin, penutupan).
+Posisi saat ini: aplikasi fungsional sudah berjalan (Bun + Vue 3, backend+frontend nyata, bukan cuma preview). **Stage 1 selesai. Stage 2 selesai. Stage 3 (Input Harian) selesai** — checklist realisasi, kerjaan tambahan, cold start, rencana manual, dan simpan atomik sudah end-to-end (backend+frontend+test) dan terverifikasi di browser. **Stage 4 sebagian selesai**: pilih tanggal laporan (backdate dalam bulan berjalan), edit data tersimpan, dan form izin sudah jalan ([ADR-0044](adr/0044-tanggal-laporan-dan-izin.md)); penutupan task belum, menunggu Q-04.
 
 ## Cara memakai checklist
 
@@ -35,14 +35,14 @@ ADR menjadi sumber keputusan, file stage menjadi sumber kriteria selesai, dan ha
 - [x] Catat jawaban serta koreksi terbaru di ADR dan perbarui [keputusan terbuka](open-decisions.md). Skema fisik dan rincian tahap berikutnya tetap dipisahkan dari keputusan pengguna.
 - [x] Selesaikan seluruh kriteria [Stage 0](stages/00-keputusan-desain.md).
 
-Langkah berikutnya: lanjut Stage 4 (koreksi, izin, penutupan) — edit/backdate, cegah duplikasi, konflik izin/realisasi, penutupan. Selesaikan Q-04/Q-05 yang relevan sebelum membangun fitur edit. Template Word menunggu Stage 7.
+Langkah berikutnya: sisa Stage 4 — penutupan task eksplisit. Selesaikan Q-04 (siapa boleh menutup, reopen, nasib rencana) sebelum membangun fiturnya. Template Word menunggu Stage 7.
 
 ## Urutan implementasi
 
 - [x] **[Stage 1 — Fondasi dan akses](stages/01-fondasi-akses.md):** Selesai — setup aplikasi, migration, login/session, dan layout dasar (mobile/laptop, kedua tema) terverifikasi (lihat bukti pelaksanaan).
 - [x] **[Stage 2 — User, project, kalender](stages/02-user-project.md):** Selesai — pengelolaan user, project, keanggotaan, dan kalender/libur end-to-end (backend+frontend+test); kriteria pembatasan pencatatan di luar keanggotaan terverifikasi lewat endpoint Stage 3.
 - [x] **[Stage 3 — Input harian](stages/03-input-harian.md):** Selesai — checklist realisasi, kerjaan tambahan, cold start, rencana manual, dan simpan atomik, end-to-end (backend+frontend+test) dan diverifikasi visual di browser (mobile/laptop, light/dark).
-- [ ] **[Stage 4 — Koreksi, izin, penutupan](stages/04-koreksi-izin-penutupan.md):** edit/backdate, cegah duplikasi, konflik izin/realisasi, serta penutupan dengan deskripsi opsional. Selesaikan Q-04/Q-05 yang relevan.
+- [ ] **[Stage 4 — Koreksi, izin, penutupan](stages/04-koreksi-izin-penutupan.md):** edit/backdate, cegah duplikasi, konflik izin/realisasi — **selesai**. Penutupan task dengan deskripsi opsional masih terbuka, menunggu Q-04.
 - [ ] **[Stage 5 — Kendala, attachment, riwayat](stages/05-kendala-attachment-riwayat.md):** resolve kendala, upload gambar tervalidasi, akses file, serta detail laporan per tanggal.
 - [ ] **[Stage 6 — Dashboard](stages/06-dashboard.md):** rekap sesuai tim dan indikator task nyangkut berdasarkan kalender kerja.
 - [ ] **[Stage 7 — Word per tipe programmer](stages/07-ekspor-word.md):** terima template, selesaikan Q-06, lalu verifikasi ekspor per orang/bulan untuk setiap tipe yang disepakati.

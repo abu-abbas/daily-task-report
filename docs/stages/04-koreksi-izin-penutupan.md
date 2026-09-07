@@ -1,8 +1,8 @@
 # Stage 04 — Koreksi laporan, izin, dan penutupan task
 
-- Status: Belum dimulai.
+- Status: Sebagian selesai — pilih tanggal laporan, edit data tersimpan, dan form izin sudah jalan ([ADR-0044](../adr/0044-tanggal-laporan-dan-izin.md)). Penutupan task (ADR-0012) belum dikerjakan, menunggu Q-04.
 - Prasyarat: Stage 3.
-- Keputusan: [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0008](../adr/0008-laporan-terlewat.md), [ADR-0009](../adr/0009-edit-submit.md), [ADR-0012](../adr/0012-penutupan-task.md), [ADR-0013](../adr/0013-izin-form.md), [ADR-0014](../adr/0014-izin-realisasi.md), [ADR-0025](../adr/0025-metode-ponytail.md).
+- Keputusan: [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0008](../adr/0008-laporan-terlewat.md), [ADR-0009](../adr/0009-edit-submit.md), [ADR-0012](../adr/0012-penutupan-task.md), [ADR-0013](../adr/0013-izin-form.md), [ADR-0014](../adr/0014-izin-realisasi.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0044](../adr/0044-tanggal-laporan-dan-izin.md).
 
 ## Cakupan
 
@@ -15,16 +15,29 @@
 
 ## Kriteria selesai dan pemeriksaan
 
-- [ ] Submit berulang tidak menggandakan data dan edit tidak mengubah log user lain.
-- [ ] Kasus awal/akhir bulan mengikuti keputusan tertulis, termasuk realisasi hari kerja sebelumnya.
-- [ ] Izin tanggal laporan dapat disimpan bersama realisasi tanggal sebelumnya; konflik tanggal sama ditolak secara atomik.
+- [x] Submit berulang tidak menggandakan data dan edit tidak mengubah log user lain.
+- [x] Kasus awal/akhir bulan mengikuti keputusan tertulis, termasuk realisasi hari kerja sebelumnya.
+- [x] Izin tanggal laporan dapat disimpan bersama realisasi tanggal sebelumnya; konflik tanggal sama ditolak secara atomik.
 - [ ] Penutupan task bekerja dengan atau tanpa deskripsi; catatan hasil realisasi tetap wajib dan berbeda fungsinya.
 - [ ] Task tidak ditutup otomatis oleh realisasi; perilaku rencana yang sudah ada ketika task ditutup telah diuji.
 
 ## Dependensi terbuka
 
-Q-01, Q-04, Q-05 dan penyesuaian skema deskripsi penutupan. Lihat [daftar keputusan terbuka](../open-decisions.md).
+Q-04 (penutupan task) — lihat [daftar keputusan terbuka](../open-decisions.md). Q-01 dan Q-05 sudah selesai untuk bagian input harian.
 
 ## Bukti pelaksanaan
 
-Belum ada implementasi atau pemeriksaan aplikasi. Isi hasil pemeriksaan dan keterbatasan aktual saat tahap dikerjakan. Berhenti setelah kriteria tahap terpenuhi; jangan menambahkan fitur di luar cakupan.
+**Pilih tanggal laporan, edit, dan izin** ([ADR-0044](../adr/0044-tanggal-laporan-dan-izin.md)) — selesai 2026-09-07:
+
+- **Backend**: `server/src/kalender.ts` bertambah `dalamBulanBerjalan()` dan `realisasiTanggalDiizinkan()` (ADR-0030). `server/src/routes/task-logs.ts` di-generalisasi dari "today" ke tanggal pilihan klien (`GET /task-logs/daily?tanggal=`, `POST /task-logs` field `tanggal`), plus efek uncheck (hapus baris checklist lama) dan validasi konflik izin (409). `server/src/routes/leaves.ts` (baru) — `POST /leaves` (upsert, auto-hapus rencana lama di tanggal sama, tolak 409 kalau ada realisasi), `DELETE /leaves/:tanggal`.
+- **Test otomatis**: `server/tests/task-logs.test.ts` bertambah dari 24 ke 33 test (bulan berjalan, pengecualian ADR-0030, efek uncheck, konflik izin). `server/tests/leaves.test.ts` baru (9 test). Total 98 test lolos lintas file.
+- **Frontend**: `InputHarianView.vue` dapat date-input (`min`/`max` dari `data.hariIni`, query string `?tanggal=`), checkbox toggle izin yang menyembunyikan card "Rencana" diganti form `Select` jenis + `Textarea` alasan. `BerandaView.vue` menampilkan banner "Cuti/Sakit/Izin hari ini" kalau `data.izin` tidak null. `lib/api.ts`/`composables/useTaskLogs.ts` digeneralisasi (`TodayInput` → `DailyInput`, `useDailyInputQuery(tanggal: Ref)`, `useSaveLeave`/`useCancelLeave`).
+- **Diverifikasi end-to-end** lewat Playwright (akun uji sementara, dihapus setelah selesai): tambah rencana hari ini → simpan → toggle izin, isi Sakit + alasan → simpan → Beranda tampilkan banner izin, rencana lama otomatis hilang → buka `/input` lagi, form izin ter-restore dengan alasan yang benar → matikan izin → simpan → Beranda kembali ke "Belum ada rencana" → ganti tanggal laporan ke backdate dalam bulan berjalan, card Realisasi/Rencana ikut berubah tanggalnya. Dicek juga tampilan dark mode.
+- Perbaikan dari review user: mengaktifkan izin saat tanggal itu sudah punya rencana tersimpan langsung menghapusnya diam-diam begitu "Simpan" diklik, tanpa user tahu dulu — mengagetkan. Ditambah baris peringatan merah di dialog konfirmasi "Simpan" yang sudah ada (bukan dialog baru): "N rencana yang sudah tersimpan di tanggal ini akan terhapus karena izin diaktifkan", cuma muncul kalau kondisinya benar relevan (izin aktif dan ada rencana tersimpan). Diverifikasi lewat Playwright: peringatan tampil di dialog konfirmasi sebelum user klik "Ya, simpan".
+- Perbaikan teks lanjutan: user bingung lihat "0 kerjaan tambahan" di dialog konfirmasi padahal ada kartu "Kerjaan tambahan" tersimpan di halaman — ternyata angka itu cuma menghitung draf **baru** sesi ini, bukan total yang sudah tersimpan (yang mana tidak berubah oleh submit ini). Diperjelas jadi "kerjaan tambahan **baru**"/"rencana **baru**" plus kalimat eksplisit "Item yang sudah tersimpan sebelumnya tidak dihitung ulang di sini."
+- Perubahan layout dari review user: kartu "Kerjaan tambahan"/"Rencana" (`InputHarianView.vue`) dan kartu rencana Beranda (`BerandaView.vue`) tadinya menampilkan badge project berulang di tiap task walau beberapa task ada di project yang sama — sekarang dikelompokkan (`lib/groupByProject.ts`, dipakai generik lewat constraint `{projectId, projectNama}`): badge project cuma tampil sekali per grup di bagian atas, task-task di bawahnya dipisah garis tipis (`border-t` + `first:border-t-0`). Konsisten di ketiga tempat karena polanya sama persis. Diverifikasi lewat Playwright: dua task di project sama tergabung satu kartu dengan satu badge, project lain jadi kartu terpisah.
+- Kalender bulanan di sidebar kanan (`AppSidebarRight.vue`) ternyata cuma dekorasi sejak awal — tidak ada `v-model`/handler apa pun, peninggalan template block awal, ditemukan lewat pertanyaan user ("pajangan doang dong"). Dihubungkan ke tanggal laporan: klik tanggal di kalender itu sekarang `router.push` ke `/input?tanggal=`, dibatasi bulan berjalan (`min-value`/`max-value`) sama seperti date-picker `InputHarianView`. Bug ditemukan sekaligus saat verifikasi: `selectedTanggal` di `InputHarianView.vue` cuma dibaca sekali dari `route.query` saat komponen dibuat, tidak reaktif terhadap navigasi `?tanggal=` dari LUAR komponen (klik di sidebar pakai `router.push`, bukan date-input lokalnya sendiri) — jadi URL berubah tapi konten halaman diam. Diperbaiki dengan `watch(() => route.query.tanggal, ...)` yang menyinkronkan balik ke `selectedTanggal`. Diverifikasi lewat Playwright: klik tanggal di sidebar mengubah URL DAN konten (card Realisasi/Rencana, date-input) sekaligus.
+
+- Perbaikan lanjutan dari review user: field "Tanggal laporan" di halaman Input Harian jadi ganda begitu kalender sidebar bisa dipakai navigasi — tapi kalender sidebar (`AppSidebarRight.vue`) cuma tampil di layar besar (`hidden lg:flex`), sedangkan aplikasi ini mobile-first (ADR-0023). Diselesaikan dengan menyembunyikan field itu cuma di breakpoint `lg` ke atas (`lg:hidden` pada wrapper-nya) — tetap satu-satunya cara pilih tanggal di mobile. Field-nya sendiri juga diganti dari `<input type="date">` native jadi `Popover` + `Calendar` shadcn-vue (permintaan user, konsisten dengan pola date-picker lain di app — form tanggal libur admin dan kalender sidebar), pakai `@internationalized/date` (`parseDate`) buat konversi ke/dari string ISO. Diverifikasi lewat Playwright: field cuma muncul di mobile (`isVisible` false di desktop), popover kalender terbuka dan klik tanggal mengubah URL + konten halaman.
+
+Penutupan task belum dikerjakan — putaran kerja terpisah, menunggu jawaban Q-04.

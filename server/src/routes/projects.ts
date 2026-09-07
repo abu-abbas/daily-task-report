@@ -121,7 +121,7 @@ export function handleListMyProjects(req: Request): Response {
   return json({ projects: rows.map(publicProject) });
 }
 
-// Usulan "Lainnya" (ADR-0042) dibuat langsung di handleSaveTodayInput (server/src/routes/task-logs.ts),
+// Usulan "Lainnya" (ADR-0042) dibuat langsung di handleSaveDailyInput (server/src/routes/task-logs.ts),
 // dalam transaksi yang sama dengan task & log-nya — bukan lewat endpoint terpisah di sini, supaya
 // draft yang batal/di-refresh sebelum "Simpan" tidak menyisakan project nyantol tanpa task apa pun.
 

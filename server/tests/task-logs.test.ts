@@ -9,7 +9,7 @@ const { db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleCreateTask } = await import("../src/routes/tasks");
-const { handleGetTodayInput, handleSaveTodayInput } = await import("../src/routes/task-logs");
+const { handleGetDailyInput, handleSaveDailyInput } = await import("../src/routes/task-logs");
 
 const TENAGA_EMAIL = "tenaga.logs@example.test";
 const REKAN_EMAIL = "rekan.logs@example.test";
@@ -90,7 +90,7 @@ beforeAll(async () => {
 
 describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
   test("checklist kosong karena belum pernah ada rencana", () => {
-    const res = handleGetTodayInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
+    const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
     expect(res.status).toBe(200);
     return res.json().then((body: { checklist: unknown[]; hariKerjaSebelumnya: string }) => {
       expect(body.checklist).toEqual([]);
@@ -99,7 +99,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
   });
 
   test("catatan realisasi kosong ditolak", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [{ taskId: taskXId, jenis: "realisasi", catatan: "   ", isExtra: true }],
       }),
@@ -109,7 +109,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
   });
 
   test("kegagalan satu item tidak menyisakan simpan parsial", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [
           { taskId: taskXId, jenis: "realisasi", catatan: "Valid", isExtra: true },
@@ -126,7 +126,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
   });
 
   test("kerjaan tambahan (cold start) berhasil, plus rencana hari ini", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [
           { taskId: taskXId, jenis: "realisasi", catatan: "Kerjaan kemarin manual", isExtra: true },
@@ -143,7 +143,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
   // GET /task-logs/today — todo-list opsional ini bukan data terstruktur.
   test("catatan rencana dengan checkbox markdown tersimpan dan terbaca balik", async () => {
     const catatan = "- [ ] siapkan draft\n- [x] baca dokumen";
-    const saveRes = await handleSaveTodayInput(
+    const saveRes = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [{ taskId: taskXId, jenis: "rencana", catatan }],
       }),
@@ -151,7 +151,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
     );
     expect(saveRes.status).toBe(200);
 
-    const getRes = handleGetTodayInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
+    const getRes = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
     const body = (await getRes.json()) as { rencanaHariIni: { taskId: number; catatan: string | null }[] };
     expect(body.rencanaHariIni.find((r) => r.taskId === taskXId)?.catatan).toBe(catatan);
   });
@@ -159,14 +159,14 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
 
 describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   test("checklist berisi Task X dan Task Y dari rencana Hari A", async () => {
-    const res = handleGetTodayInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
+    const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
     const body = (await res.json()) as { checklist: { taskId: number; realisasiCatatan: string | null }[] };
     expect(body.checklist.map((c) => c.taskId).sort()).toEqual([taskXId, taskYId].sort());
     expect(body.checklist.every((c) => c.realisasiCatatan === null)).toBe(true);
   });
 
   test("centang Task X saja (realisasi sebagian) + tambahan + rencana baru", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [
           { taskId: taskXId, jenis: "realisasi", catatan: "Task X beres" },
@@ -187,7 +187,7 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   });
 
   test("GET ulang menunjukkan Task X sudah terisi, tambahan muncul terpisah", async () => {
-    const res = handleGetTodayInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
+    const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
     const body = (await res.json()) as {
       checklist: { taskId: number; realisasiCatatan: string | null }[];
       tambahan: { deskripsi: string }[];
@@ -198,7 +198,7 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   });
 
   test("submit ulang hari yang sama meng-update, bukan menggandakan baris", async () => {
-    await handleSaveTodayInput(
+    await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [{ taskId: taskXId, jenis: "realisasi", catatan: "Task X beres (revisi)" }],
       }),
@@ -212,7 +212,7 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   });
 
   test("dua user beda bisa realisasi task+tanggal yang sama, catatan terpisah", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", rekanToken, {
         items: [{ taskId: taskXId, jenis: "realisasi", catatan: "Catatan rekan", isExtra: true }],
       }),
@@ -231,9 +231,33 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   });
 });
 
+// ADR-0044: uncheck item checklist realisasi yang sudah tersimpan lalu simpan ulang tanpa
+// item itu harus menghapus barisnya, bukan membiarkannya nyangkut (Q-05).
+describe("Efek uncheck (ADR-0044)", () => {
+  test("submit ulang Hari B tanpa realisasi Task X menghapus baris lamanya", async () => {
+    const before = db
+      .query("SELECT id FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
+      .get(tenagaId, taskXId, HARI_A);
+    expect(before).not.toBeNull();
+
+    // Cuma kirim ulang rencana yang sudah ada (no-op upsert) — tidak ada item realisasi sama
+    // sekali, jadi checklist Task X (dan Task Y) di Hari A dianggap di-uncheck semua.
+    const res = await handleSaveDailyInput(
+      req("POST", "/api/task-logs", tenagaToken, { items: [{ taskId: taskXId, jenis: "rencana" }] }),
+      HARI_B,
+    );
+    expect(res.status).toBe(200);
+
+    const after = db
+      .query("SELECT id FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
+      .get(tenagaId, taskXId, HARI_A);
+    expect(after).toBeNull();
+  });
+});
+
 describe("Hari C — melompati akhir pekan, memakai rencana baru dari Hari B", () => {
   test("checklist berisi rencana baru (Task X) yang dibuat di Hari B", async () => {
-    const res = handleGetTodayInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_C);
+    const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_C);
     const body = (await res.json()) as { checklist: { taskId: number }[]; hariKerjaSebelumnya: string };
     expect(body.hariKerjaSebelumnya).toBe(HARI_B);
     expect(body.checklist.map((c) => c.taskId)).toEqual([taskXId]);
@@ -246,7 +270,7 @@ describe("Hari C — melompati akhir pekan, memakai rencana baru dari Hari B", (
 // dibuat begitu klik "Tambahkan ke draft", padahal draft itu sendiri belum tentu jadi "Simpan").
 describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
   test("berhasil: project baru, keanggotaan, task, dan log semuanya tercipta sekaligus", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [
           {
@@ -283,7 +307,7 @@ describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
   });
 
   test("gagal validasi (catatan kosong) tidak menyisakan project nyantol tanpa task", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [
           {
@@ -303,7 +327,7 @@ describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
   });
 
   test("satu item gagal dalam submit gabungan membatalkan seluruhnya, termasuk project baru", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [
           {
@@ -326,17 +350,93 @@ describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
 
 describe("Otorisasi", () => {
   test("GET tanpa login ditolak", () => {
-    const res = handleGetTodayInput(req("GET", "/api/task-logs/today"), HARI_A);
+    const res = handleGetDailyInput(req("GET", "/api/task-logs/today"), HARI_A);
     expect(res.status).toBe(401);
   });
 
   test("POST realisasi pada task di project yang bukan keanggotaannya ditolak (403)", async () => {
-    const res = await handleSaveTodayInput(
+    const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {
         items: [{ taskId: 999999, jenis: "realisasi", catatan: "Percobaan" }],
       }),
       HARI_A,
     );
     expect(res.status).toBe(404);
+  });
+});
+
+// ADR-0008/0009: tanggal laporan cuma boleh dalam bulan berjalan (relatif hari ini sungguhan).
+describe("Bulan berjalan (ADR-0008/0009)", () => {
+  test("GET dengan tanggal di bulan lalu ditolak (400)", () => {
+    const res = handleGetDailyInput(req("GET", "/api/task-logs/daily?tanggal=2026-09-30", tenagaToken), HARI_A);
+    expect(res.status).toBe(400);
+  });
+
+  test("POST dengan tanggal di bulan lalu ditolak (400)", async () => {
+    const res = await handleSaveDailyInput(
+      req("POST", "/api/task-logs", tenagaToken, {
+        tanggal: "2026-09-30",
+        items: [{ taskId: taskXId, jenis: "rencana" }],
+      }),
+      HARI_A,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  test("GET/POST tanggal backdate dalam bulan berjalan yang sama diterima", async () => {
+    const getRes = handleGetDailyInput(req("GET", `/api/task-logs/daily?tanggal=${HARI_B}`, tenagaToken), HARI_C);
+    expect(getRes.status).toBe(200);
+
+    const postRes = await handleSaveDailyInput(
+      req("POST", "/api/task-logs", tenagaToken, { tanggal: HARI_B, items: [{ taskId: taskXId, jenis: "rencana" }] }),
+      HARI_C,
+    );
+    expect(postRes.status).toBe(200);
+  });
+});
+
+// ADR-0030: pengecualian realisasi lintas-bulan cuma berlaku persis saat tanggal laporan =
+// hari ini sungguhan (hari kerja pertama bulan baru), tidak terbuka lagi keesokan harinya.
+describe("Pengecualian lintas-bulan (ADR-0030)", () => {
+  const AWAL_NOVEMBER = "2026-11-02"; // Senin, hari kerja pertama November (1 Nov = Minggu)
+  const SEHARI_SETELAHNYA = "2026-11-03"; // Selasa — pengecualian sudah tidak berlaku lagi
+
+  test("realisasi hari kerja terakhir Oktober diterima persis di hari kerja pertama November", async () => {
+    const res = await handleSaveDailyInput(
+      req("POST", "/api/task-logs", tenagaToken, {
+        items: [{ taskId: taskXId, jenis: "realisasi", catatan: "Realisasi akhir Oktober", isExtra: true }],
+      }),
+      AWAL_NOVEMBER,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  test("backdate ke tanggal itu di hari berikutnya ditolak, pengecualian tidak terbuka lagi", async () => {
+    const res = await handleSaveDailyInput(
+      req("POST", "/api/task-logs", tenagaToken, {
+        tanggal: AWAL_NOVEMBER,
+        items: [{ taskId: taskXId, jenis: "realisasi", catatan: "Percobaan telat", isExtra: true }],
+      }),
+      SEHARI_SETELAHNYA,
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+// ADR-0014: realisasi tidak boleh bentrok dengan izin/cuti/sakit pada tanggal yang sama.
+describe("Konflik dengan izin (ADR-0014)", () => {
+  const HARI_IZIN = "2026-10-12"; // Senin — dipakai sebagai hariKerjaSebelumnya di test ini
+  const HARI_LAPORAN = "2026-10-13"; // Selasa, previousWorkday = HARI_IZIN
+
+  test("realisasi ditolak (409) kalau hari kerja sebelumnya sudah tercatat izin", async () => {
+    db.query("INSERT INTO leaves (user_id, tanggal, jenis) VALUES (?, ?, 'sakit')").run(tenagaId, HARI_IZIN);
+
+    const res = await handleSaveDailyInput(
+      req("POST", "/api/task-logs", tenagaToken, {
+        items: [{ taskId: taskXId, jenis: "realisasi", catatan: "Tetap coba isi", isExtra: true }],
+      }),
+      HARI_LAPORAN,
+    );
+    expect(res.status).toBe(409);
   });
 });
