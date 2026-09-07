@@ -110,6 +110,7 @@ watch(
 );
 
 const checklistEmpty = computed(() => (data.value?.checklist.length ?? 0) === 0);
+const checklistGroups = computed(() => groupByProject(data.value?.checklist ?? []));
 const tambahanGroups = computed(() => groupByProject(data.value?.tambahan ?? []));
 const rencanaGroups = computed(() => groupByProject(data.value?.rencanaHariIni ?? []));
 
@@ -328,35 +329,39 @@ const rencanaTersimpanAkanDihapus = computed(() =>
             </Button>
           </div>
 
-          <div v-else class="grid gap-3">
-            <div v-for="item in data.checklist" :key="item.taskId" class="grid gap-2 rounded-md border p-3">
-              <label :for="`realisasi-${item.taskId}`" class="flex items-start gap-2 text-sm">
-                <Checkbox
-                  :id="`realisasi-${item.taskId}`"
-                  :model-value="checklistDrafts[item.taskId]?.checked ?? false"
-                  @update:model-value="(v) => (checklistDrafts[item.taskId]!.checked = v === true)"
-                />
-                <span class="grid gap-1">
-                  <span class="font-medium">{{ item.deskripsi }}</span>
-                  <span class="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                    <ProjectBadge :nama="item.projectNama" />
-                    <Badge v-if="item.tag" variant="secondary">{{ item.tag }}</Badge>
-                  </span>
-                </span>
-              </label>
-              <MiniMarkdownEditor
-                v-if="checklistDrafts[item.taskId]?.checked"
-                v-model="checklistDrafts[item.taskId]!.catatan"
-                aria-label="Catatan hasil"
-                placeholder="Catatan hasil (wajib)"
-                rows="2"
-              />
-              <p
-                v-if="checklistDrafts[item.taskId]?.checked && !checklistDrafts[item.taskId]!.catatan.trim()"
-                class="text-sm text-destructive"
+          <div v-else class="grid gap-2">
+            <div v-for="group in checklistGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3">
+              <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
+              <div
+                v-for="item in group.items"
+                :key="item.taskId"
+                class="grid gap-2 border-t pt-2 first:border-t-0 first:pt-0"
               >
-                Catatan hasil wajib diisi.
-              </p>
+                <label :for="`realisasi-${item.taskId}`" class="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    :id="`realisasi-${item.taskId}`"
+                    :model-value="checklistDrafts[item.taskId]?.checked ?? false"
+                    @update:model-value="(v) => (checklistDrafts[item.taskId]!.checked = v === true)"
+                  />
+                  <span class="grid gap-1">
+                    <span class="font-medium">{{ item.deskripsi }}</span>
+                    <Badge v-if="item.tag" variant="secondary" class="w-fit">{{ item.tag }}</Badge>
+                  </span>
+                </label>
+                <MiniMarkdownEditor
+                  v-if="checklistDrafts[item.taskId]?.checked"
+                  v-model="checklistDrafts[item.taskId]!.catatan"
+                  aria-label="Catatan hasil"
+                  placeholder="Catatan hasil (wajib)"
+                  rows="2"
+                />
+                <p
+                  v-if="checklistDrafts[item.taskId]?.checked && !checklistDrafts[item.taskId]!.catatan.trim()"
+                  class="text-sm text-destructive"
+                >
+                  Catatan hasil wajib diisi.
+                </p>
+              </div>
             </div>
           </div>
 
