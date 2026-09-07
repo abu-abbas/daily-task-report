@@ -11,6 +11,7 @@ interface ChecklistRow {
   tag: string | null;
   projectId: number;
   projectNama: string;
+  taskStatus: "open" | "closed";
 }
 
 interface RencanaChecklistRow extends ChecklistRow {
@@ -48,7 +49,7 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
   // hilang total begitu rencana jadi item checklist, user tidak bisa lihat lagi apa yang direncanakan.
   const checklistRows = db
     .query<RencanaChecklistRow, [number, string]>(
-      `SELECT tl.task_id AS taskId, tl.catatan AS rencanaCatatan, t.deskripsi, t.tag, t.project_id AS projectId, p.nama AS projectNama
+      `SELECT tl.task_id AS taskId, tl.catatan AS rencanaCatatan, t.deskripsi, t.tag, t.status AS taskStatus, t.project_id AS projectId, p.nama AS projectNama
        FROM task_logs tl
        JOIN tasks t ON t.id = tl.task_id
        JOIN projects p ON p.id = t.project_id
@@ -71,7 +72,7 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
 
   const tambahan = db
     .query<ChecklistRow & { catatan: string | null }, [number, string]>(
-      `SELECT tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.project_id AS projectId, p.nama AS projectNama
+      `SELECT tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.status AS taskStatus, t.project_id AS projectId, p.nama AS projectNama
        FROM task_logs tl
        JOIN tasks t ON t.id = tl.task_id
        JOIN projects p ON p.id = t.project_id
@@ -82,7 +83,7 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
 
   const rencanaHariIni = db
     .query<ChecklistRow & { catatan: string | null }, [number, string]>(
-      `SELECT tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.project_id AS projectId, p.nama AS projectNama
+      `SELECT tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.status AS taskStatus, t.project_id AS projectId, p.nama AS projectNama
        FROM task_logs tl
        JOIN tasks t ON t.id = tl.task_id
        JOIN projects p ON p.id = t.project_id

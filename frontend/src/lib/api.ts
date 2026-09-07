@@ -170,6 +170,7 @@ export interface ChecklistItem {
   taskId: number;
   deskripsi: string;
   tag: string | null;
+  taskStatus: "open" | "closed";
   projectId: number;
   projectNama: string;
   rencanaCatatan: string | null;
@@ -181,6 +182,7 @@ export interface TambahanItem {
   catatan: string | null;
   deskripsi: string;
   tag: string | null;
+  taskStatus: "open" | "closed";
   projectId: number;
   projectNama: string;
 }
@@ -190,6 +192,7 @@ export interface RencanaHariIniItem {
   catatan: string | null;
   deskripsi: string;
   tag: string | null;
+  taskStatus: "open" | "closed";
   projectId: number;
   projectNama: string;
 }

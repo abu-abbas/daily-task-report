@@ -107,9 +107,6 @@ export async function handleCloseTask(req: Request, taskId: number): Promise<Res
   if (task.status === "closed") return errorResponse(409, "Task sudah ditutup.");
 
   const deskripsiPenutupan = parsed.data.deskripsiPenutupan?.trim() || null;
-  // ADR-0009: catatan hasil realisasi wajib diisi — deskripsi penutupan jadi catatannya kalau
-  // ada, kalau tidak diisi tetap butuh catatan generik (bukan kosong).
-  const catatanRealisasi = deskripsiPenutupan ?? "Task ditutup.";
 
   db.transaction(() => {
     db.query("UPDATE tasks SET status = 'closed', deskripsi_penutupan = ? WHERE id = ?").run(
@@ -117,9 +114,12 @@ export async function handleCloseTask(req: Request, taskId: number): Promise<Res
       taskId,
     );
 
+    // ADR-0009: catatan hasil realisasi wajib diisi. Prioritas: deskripsi penutupan yang baru
+    // diisi > catatan rencana yang sudah ada duluan (jangan sampai checklist/notes yang sudah
+    // ditulis tertimpa jadi generik) > fallback generik kalau memang keduanya kosong.
     const belumRealisasi = db
-      .query<{ userId: number; tanggal: string }, [number]>(
-        `SELECT tl.user_id AS userId, tl.tanggal FROM task_logs tl
+      .query<{ userId: number; tanggal: string; rencanaCatatan: string | null }, [number]>(
+        `SELECT tl.user_id AS userId, tl.tanggal, tl.catatan AS rencanaCatatan FROM task_logs tl
          WHERE tl.task_id = ? AND tl.jenis = 'rencana'
          AND NOT EXISTS (
            SELECT 1 FROM task_logs r
@@ -129,9 +129,10 @@ export async function handleCloseTask(req: Request, taskId: number): Promise<Res
       .all(taskId);
 
     for (const row of belumRealisasi) {
+      const catatan = deskripsiPenutupan ?? row.rencanaCatatan ?? "Task ditutup.";
       db.query(
         "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan, is_extra) VALUES (?, ?, ?, 'realisasi', ?, 0)",
-      ).run(taskId, row.userId, row.tanggal, catatanRealisasi);
+      ).run(taskId, row.userId, row.tanggal, catatan);
     }
   })();
 

@@ -220,4 +220,22 @@ describe("POST /api/tasks/:id/tutup", () => {
       .get(taskId2) as { catatan: string };
     expect(realisasi.catatan).toBe("Task ditutup.");
   });
+
+  test("tanpa deskripsi penutupan tapi rencana sudah punya catatan sendiri, catatan itu dipakai (bukan fallback generik)", async () => {
+    const createRes = await handleCreateTask(
+      req("POST", "/api/tasks", tenagaToken, { projectId, deskripsi: "Task Ditutup Sudah Ada Catatan" }),
+    );
+    const taskId3 = ((await createRes.json()) as { task: { id: number } }).task.id;
+    db.query(
+      "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2026-09-12', 'rencana', ?)",
+    ).run(taskId3, tenagaId, "- [ ] Penambahan Daftar Pengguna\n- [ ] Penambahan Form Tambah Pengguna");
+
+    const res = await handleCloseTask(req("POST", `/api/tasks/${taskId3}/tutup`, tenagaToken, {}), taskId3);
+    expect(res.status).toBe(200);
+
+    const realisasi = db
+      .query("SELECT catatan FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-12' AND jenis = 'realisasi'")
+      .get(taskId3) as { catatan: string };
+    expect(realisasi.catatan).toBe("- [ ] Penambahan Daftar Pengguna\n- [ ] Penambahan Form Tambah Pengguna");
+  });
 });

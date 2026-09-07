@@ -345,7 +345,10 @@ const rencanaTersimpanAkanDihapus = computed(() =>
                     @update:model-value="(v) => (checklistDrafts[item.taskId]!.checked = v === true)"
                   />
                   <span class="grid gap-1">
-                    <span class="font-medium">{{ item.deskripsi }}</span>
+                    <span class="flex flex-wrap items-center gap-1">
+                      <span class="font-medium">{{ item.deskripsi }}</span>
+                      <Badge v-if="item.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
+                    </span>
                     <Badge v-if="item.tag" variant="secondary" class="w-fit">{{ item.tag }}</Badge>
                   </span>
                 </label>
@@ -378,7 +381,8 @@ const rencanaTersimpanAkanDihapus = computed(() =>
                   <div class="flex items-start justify-between gap-2">
                     <p class="font-medium">{{ t.deskripsi }}</p>
                     <div class="flex shrink-0 items-center gap-1">
-                      <Tooltip>
+                      <Badge v-if="t.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
+                      <Tooltip v-else>
                         <TooltipTrigger as-child>
                           <Button variant="ghost" size="icon-sm" aria-label="Tandai selesai" @click="openCloseDialog(t)">
                             <CircleCheck class="size-4" />
@@ -461,7 +465,8 @@ const rencanaTersimpanAkanDihapus = computed(() =>
                   <div class="flex items-start justify-between gap-2">
                     <p class="font-medium">{{ r.deskripsi }}</p>
                     <div class="flex shrink-0 items-center gap-1">
-                      <Tooltip>
+                      <Badge v-if="r.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
+                      <Tooltip v-else>
                         <TooltipTrigger as-child>
                           <Button variant="ghost" size="icon-sm" aria-label="Tandai selesai" @click="openCloseDialog(r)">
                             <CircleCheck class="size-4" />
