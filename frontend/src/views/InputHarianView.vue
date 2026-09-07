@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import { parseDate } from "@internationalized/date";
-import { CalendarIcon, Plus } from "@lucide/vue";
+import { CalendarIcon, CircleCheck, Plus } from "@lucide/vue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
@@ -376,9 +377,16 @@ const rencanaTersimpanAkanDihapus = computed(() =>
                 <div v-for="t in group.items" :key="t.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
                   <div class="flex items-start justify-between gap-2">
                     <p class="font-medium">{{ t.deskripsi }}</p>
-                    <Button variant="ghost" size="sm" class="h-auto shrink-0 px-2 py-0.5 text-xs" @click="openCloseDialog(t)">
-                      Tandai selesai
-                    </Button>
+                    <div class="flex shrink-0 items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger as-child>
+                          <Button variant="ghost" size="icon-sm" aria-label="Tandai selesai" @click="openCloseDialog(t)">
+                            <CircleCheck class="size-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Tandai selesai</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
                   <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
                 </div>
@@ -452,9 +460,16 @@ const rencanaTersimpanAkanDihapus = computed(() =>
                 <div v-for="r in group.items" :key="r.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
                   <div class="flex items-start justify-between gap-2">
                     <p class="font-medium">{{ r.deskripsi }}</p>
-                    <Button variant="ghost" size="sm" class="h-auto shrink-0 px-2 py-0.5 text-xs" @click="openCloseDialog(r)">
-                      Tandai selesai
-                    </Button>
+                    <div class="flex shrink-0 items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger as-child>
+                          <Button variant="ghost" size="icon-sm" aria-label="Tandai selesai" @click="openCloseDialog(r)">
+                            <CircleCheck class="size-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Tandai selesai</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
                   <MiniMarkdownText v-if="r.catatan" :text="r.catatan" class="text-xs text-muted-foreground" />
                 </div>
