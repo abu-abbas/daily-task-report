@@ -4,10 +4,12 @@ import { handleCreateUser, handleListUsers, handleUpdateUser } from "./routes/us
 import { handleCreateHoliday, handleDeleteHoliday, handleListHolidays } from "./routes/holidays";
 import {
   handleAddMember,
+  handleConfirmProject,
   handleCreateProject,
   handleEndMembership,
   handleListMyProjects,
   handleListProjects,
+  handleMergeProject,
   handleUpdateProject,
 } from "./routes/projects";
 import { handleCreateTask, handleListTasks } from "./routes/tasks";
@@ -30,6 +32,12 @@ Bun.serve({
     "/api/projects": { GET: handleListProjects, POST: handleCreateProject },
     "/api/projects/mine": { GET: handleListMyProjects },
     "/api/projects/:id": { PUT: (req) => handleUpdateProject(req, Number(req.params.id)) },
+    "/api/projects/:id/konfirmasi": {
+      POST: (req) => handleConfirmProject(req, Number(req.params.id)),
+    },
+    "/api/projects/:id/gabung": {
+      POST: (req) => handleMergeProject(req, Number(req.params.id)),
+    },
     "/api/projects/:id/members": {
       POST: (req) => handleAddMember(req, Number(req.params.id)),
     },

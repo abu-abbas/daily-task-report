@@ -97,6 +97,7 @@ export interface Project {
   id: number;
   nama: string;
   isActive: boolean;
+  belumDirekonsiliasi: boolean;
   members: ProjectMember[];
 }
 
@@ -114,6 +115,19 @@ export const createProject = (payload: ProjectPayload) =>
 
 export const updateProject = (id: number, payload: ProjectPayload) =>
   api<{ project: Project }>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+
+// ADR-0042: usulan "Lainnya" dibuat lewat POST /task-logs (lihat NewTaskLogPayload di bawah),
+// bukan endpoint terpisah di sini — supaya draft yang batal/di-refresh sebelum "Simpan" tidak
+// menyisakan project nyantol tanpa task/catatan apa pun.
+
+export const confirmProject = (id: number) =>
+  api<{ project: Project }>(`/projects/${id}/konfirmasi`, { method: "POST" });
+
+export const mergeProject = (id: number, targetProjectId: number) =>
+  api<{ project: Project }>(`/projects/${id}/gabung`, {
+    method: "POST",
+    body: JSON.stringify({ targetProjectId }),
+  });
 
 export const addProjectMember = (projectId: number, userId: number) =>
   api<{ project: Project }>(`/projects/${projectId}/members`, {
@@ -179,9 +193,19 @@ export interface TodayInput {
 
 export const fetchTodayInput = () => api<TodayInput>("/task-logs/today");
 
+// projectBaru (bukan projectId): project usulan "Lainnya" dibuat dalam transaksi simpan yang
+// sama dengan task-nya (ADR-0042) — bukan lebih dulu secara terpisah, supaya draft yang belum
+// sempat "Simpan" tidak menyisakan project nyantol tanpa task/catatan apa pun kalau batal/refresh.
+export interface NewTaskLogPayload {
+  projectId?: number;
+  projectBaru?: string;
+  deskripsi: string;
+  tag?: string;
+}
+
 export interface SaveTaskLogItem {
   taskId?: number;
-  newTask?: NewTaskPayload;
+  newTask?: NewTaskLogPayload;
   jenis: "rencana" | "realisasi";
   catatan?: string;
   isExtra?: boolean;

@@ -3,7 +3,6 @@ import { computed, ref, watch } from "vue";
 import { toast } from "vue-sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -18,6 +17,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import TaskPickerForm from "@/components/input-harian/TaskPickerForm.vue";
+import MiniMarkdownEditor from "@/components/input-harian/MiniMarkdownEditor.vue";
+import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
 import { ApiError, type SaveTaskLogItem } from "@/lib/api";
 import { formatTanggalPanjang } from "@/lib/locale";
 import { useSaveTodayInput, useTodayInputQuery } from "@/composables/useTaskLogs";
@@ -50,7 +51,7 @@ const checklistEmpty = computed(() => (data.value?.checklist.length ?? 0) === 0)
 interface DraftItem {
   key: number;
   taskId?: number;
-  newTask?: { projectId: number; deskripsi: string; tag?: string };
+  newTask?: { projectId?: number; projectBaru?: string; deskripsi: string; tag?: string };
   catatan?: string;
 }
 let draftKeySeq = 0;
@@ -170,7 +171,7 @@ const ringkasan = computed(() => {
                   </span>
                 </span>
               </label>
-              <Textarea
+              <MiniMarkdownEditor
                 v-if="checklistDrafts[item.taskId]?.checked"
                 v-model="checklistDrafts[item.taskId]!.catatan"
                 aria-label="Catatan hasil"
@@ -194,13 +195,17 @@ const ringkasan = computed(() => {
             <div v-if="data.tambahan.length > 0" class="grid gap-2">
               <div v-for="t in data.tambahan" :key="t.taskId" class="rounded-md border p-3 text-sm">
                 <p class="font-medium">{{ t.deskripsi }}</p>
-                <p class="text-xs text-muted-foreground">{{ t.projectNama }} — {{ t.catatan }}</p>
+                <p class="text-xs text-muted-foreground">{{ t.projectNama }}</p>
+                <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
               </div>
             </div>
 
             <div v-if="tambahanDrafts.length > 0" class="grid gap-2">
-              <div v-for="d in tambahanDrafts" :key="d.key" class="flex items-center justify-between rounded-md border p-3 text-sm">
-                <span>{{ draftLabel(d) }} — {{ d.catatan }}</span>
+              <div v-for="d in tambahanDrafts" :key="d.key" class="flex items-start justify-between gap-2 rounded-md border p-3 text-sm">
+                <div class="grid gap-1">
+                  <span class="font-medium">{{ draftLabel(d) }}</span>
+                  <MiniMarkdownText v-if="d.catatan" :text="d.catatan" class="text-muted-foreground" />
+                </div>
                 <Button variant="ghost" size="sm" @click="removeTambahan(d.key)">Hapus</Button>
               </div>
             </div>

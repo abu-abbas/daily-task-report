@@ -8,6 +8,7 @@ interface ProjectRow {
   id: number;
   nama: string;
   is_active: number;
+  belum_direkonsiliasi: number;
 }
 
 interface MemberRow {
@@ -32,12 +33,40 @@ function publicProject(row: ProjectRow) {
     id: row.id,
     nama: row.nama,
     isActive: row.is_active === 1,
+    belumDirekonsiliasi: row.belum_direkonsiliasi === 1,
     members: getActiveMembers(row.id),
   };
 }
 
 function getProjectRow(id: number): ProjectRow | null {
-  return db.query<ProjectRow, [number]>("SELECT id, nama, is_active FROM projects WHERE id = ?").get(id);
+  return db
+    .query<ProjectRow, [number]>("SELECT id, nama, is_active, belum_direkonsiliasi FROM projects WHERE id = ?")
+    .get(id);
+}
+
+// Dipakai handleAddMember (admin) dan handleMergeProject (ADR-0042, memindahkan anggota
+// project usulan ke project tujuan) — satu sumber logika "aktifkan lagi baris lama, jangan
+// menggandakan" (ADR-0034).
+function activateMembership(userId: number, projectId: number): void {
+  const existing = db
+    .query<{ ended_at: string | null }, [number, number]>(
+      "SELECT ended_at FROM user_project WHERE user_id = ? AND project_id = ?",
+    )
+    .get(userId, projectId);
+
+  if (existing) {
+    if (existing.ended_at !== null) {
+      db.query("UPDATE user_project SET ended_at = NULL WHERE user_id = ? AND project_id = ?").run(
+        userId,
+        projectId,
+      );
+    }
+  } else {
+    db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
+      userId,
+      projectId,
+    );
+  }
 }
 
 // Aturan inti ADR-0005: tenaga ahli hanya boleh bertindak (mencatat pekerjaan, dst.) pada
@@ -67,7 +96,9 @@ export function handleListProjects(req: Request): Response {
   const ctx = requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
-  const rows = db.query<ProjectRow, []>("SELECT id, nama, is_active FROM projects ORDER BY id").all();
+  const rows = db
+    .query<ProjectRow, []>("SELECT id, nama, is_active, belum_direkonsiliasi FROM projects ORDER BY id")
+    .all();
   return json({ projects: rows.map(publicProject) });
 }
 
@@ -80,7 +111,7 @@ export function handleListMyProjects(req: Request): Response {
 
   const rows = db
     .query<ProjectRow, [number]>(
-      `SELECT projects.id, projects.nama, projects.is_active
+      `SELECT projects.id, projects.nama, projects.is_active, projects.belum_direkonsiliasi
        FROM user_project
        JOIN projects ON projects.id = user_project.project_id
        WHERE user_project.user_id = ? AND user_project.ended_at IS NULL
@@ -88,6 +119,63 @@ export function handleListMyProjects(req: Request): Response {
     )
     .all(ctx.user.id);
   return json({ projects: rows.map(publicProject) });
+}
+
+// Usulan "Lainnya" (ADR-0042) dibuat langsung di handleSaveTodayInput (server/src/routes/task-logs.ts),
+// dalam transaksi yang sama dengan task & log-nya — bukan lewat endpoint terpisah di sini, supaya
+// draft yang batal/di-refresh sebelum "Simpan" tidak menyisakan project nyantol tanpa task apa pun.
+
+// Admin menyatakan usulan "Lainnya" sah berdiri sendiri sebagai project (ADR-0042). Rename
+// project ini (kalau perlu) tetap lewat PUT /api/projects/:id yang sudah ada, bukan diulang di sini.
+export async function handleConfirmProject(req: Request, id: number): Promise<Response> {
+  const ctx = requireAdmin(req);
+  if (ctx instanceof Response) return ctx;
+
+  if (!Number.isInteger(id)) return errorResponse(400, "ID tidak valid.");
+  const row = getProjectRow(id);
+  if (!row) return errorResponse(404, "Project tidak ditemukan.");
+  if (row.belum_direkonsiliasi !== 1) return errorResponse(409, "Project ini bukan usulan yang menunggu rekonsiliasi.");
+
+  db.query("UPDATE projects SET belum_direkonsiliasi = 0 WHERE id = ?").run(id);
+  return json({ project: publicProject(getProjectRow(id)!) });
+}
+
+const mergePayloadSchema = z.object({
+  targetProjectId: z.number().int().positive(),
+});
+
+// Admin menggabungkan usulan "Lainnya" ke project existing yang ternyata sudah ada (ADR-0042):
+// pindahkan task & keanggotaan ke project tujuan, lalu hapus project usulannya. Dibatasi ke
+// project berflag belum_direkonsiliasi supaya jalur ini tidak dipakai menggabung project resmi
+// mana pun sembarangan.
+export async function handleMergeProject(req: Request, id: number): Promise<Response> {
+  const ctx = requireAdmin(req);
+  if (ctx instanceof Response) return ctx;
+
+  if (!Number.isInteger(id)) return errorResponse(400, "ID tidak valid.");
+  const source = getProjectRow(id);
+  if (!source) return errorResponse(404, "Project tidak ditemukan.");
+  if (source.belum_direkonsiliasi !== 1) {
+    return errorResponse(409, "Project ini bukan usulan yang menunggu rekonsiliasi.");
+  }
+
+  const body = await req.json().catch(() => null);
+  const parsed = mergePayloadSchema.safeParse(body);
+  if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
+
+  if (parsed.data.targetProjectId === id) return errorResponse(400, "Tidak bisa digabung ke project itu sendiri.");
+  const target = getProjectRow(parsed.data.targetProjectId);
+  if (!target) return errorResponse(404, "Project tujuan tidak ditemukan.");
+
+  const members = getActiveMembers(id);
+
+  db.transaction(() => {
+    db.query("UPDATE tasks SET project_id = ? WHERE project_id = ?").run(target.id, id);
+    for (const member of members) activateMembership(member.id, target.id);
+    db.query("DELETE FROM projects WHERE id = ?").run(id);
+  })();
+
+  return json({ project: publicProject(getProjectRow(target.id)!) });
 }
 
 export async function handleCreateProject(req: Request): Promise<Response> {
@@ -151,17 +239,7 @@ export async function handleAddMember(req: Request, projectId: number): Promise<
     return errorResponse(409, "User sudah menjadi anggota project ini.");
   }
 
-  if (existing) {
-    db.query("UPDATE user_project SET ended_at = NULL WHERE user_id = ? AND project_id = ?").run(
-      parsed.data.userId,
-      projectId,
-    );
-  } else {
-    db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
-      parsed.data.userId,
-      projectId,
-    );
-  }
+  activateMembership(parsed.data.userId, projectId);
 
   return json({ project: publicProject(getProjectRow(projectId)!) }, { status: 201 });
 }

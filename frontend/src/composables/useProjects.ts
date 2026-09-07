@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import {
   addProjectMember,
+  confirmProject,
   createProject,
   endProjectMembership,
   fetchMyProjects,
   fetchProjects,
+  mergeProject,
   updateProject,
   type ProjectPayload,
 } from "@/lib/api";
@@ -58,6 +60,23 @@ export function useEndProjectMembership() {
   return useMutation({
     mutationFn: ({ projectId, userId }: { projectId: number; userId: number }) =>
       endProjectMembership(projectId, userId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useConfirmProject() {
+  const invalidate = useInvalidateProjects();
+  return useMutation({
+    mutationFn: (id: number) => confirmProject(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useMergeProject() {
+  const invalidate = useInvalidateProjects();
+  return useMutation({
+    mutationFn: ({ id, targetProjectId }: { id: number; targetProjectId: number }) =>
+      mergeProject(id, targetProjectId),
     onSuccess: invalidate,
   });
 }

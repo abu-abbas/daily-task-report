@@ -223,6 +223,90 @@ describe("Hari C — melompati akhir pekan, memakai rencana baru dari Hari B", (
   });
 });
 
+// ADR-0042: opsi "Lainnya" — project usulan dibuat dalam transaksi simpan yang sama dengan
+// task & catatannya, bukan lebih dulu secara terpisah, supaya tidak ada project nyantol tanpa
+// task/catatan kalau submit gagal atau dibatalkan (bug yang sempat ditemukan: project keburu
+// dibuat begitu klik "Tambahkan ke draft", padahal draft itu sendiri belum tentu jadi "Simpan").
+describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
+  test("berhasil: project baru, keanggotaan, task, dan log semuanya tercipta sekaligus", async () => {
+    const res = await handleSaveTodayInput(
+      req("POST", "/api/task-logs", tenagaToken, {
+        items: [
+          {
+            newTask: { projectBaru: "SI-Uji ProjectBaru", deskripsi: "Setup awal" },
+            jenis: "realisasi",
+            catatan: "mulai setup",
+            isExtra: true,
+          },
+        ],
+      }),
+      HARI_A,
+    );
+    expect(res.status).toBe(200);
+
+    const project = db
+      .query<{ id: number; belum_direkonsiliasi: number }, [string]>(
+        "SELECT id, belum_direkonsiliasi FROM projects WHERE nama = ?",
+      )
+      .get("SI-Uji ProjectBaru");
+    expect(project?.belum_direkonsiliasi).toBe(1);
+
+    const membership = db
+      .query("SELECT ended_at FROM user_project WHERE user_id = ? AND project_id = ?")
+      .get(tenagaId, project!.id) as { ended_at: string | null };
+    expect(membership?.ended_at).toBeNull();
+
+    const task = db
+      .query("SELECT id FROM tasks WHERE project_id = ? AND deskripsi = ?")
+      .get(project!.id, "Setup awal") as { id: number };
+    const log = db
+      .query("SELECT catatan FROM task_logs WHERE task_id = ? AND user_id = ?")
+      .get(task.id, tenagaId) as { catatan: string };
+    expect(log.catatan).toBe("mulai setup");
+  });
+
+  test("gagal validasi (catatan kosong) tidak menyisakan project nyantol tanpa task", async () => {
+    const res = await handleSaveTodayInput(
+      req("POST", "/api/task-logs", tenagaToken, {
+        items: [
+          {
+            newTask: { projectBaru: "SI-Uji Batal", deskripsi: "Tidak jadi" },
+            jenis: "realisasi",
+            catatan: "   ",
+            isExtra: true,
+          },
+        ],
+      }),
+      HARI_A,
+    );
+    expect(res.status).toBe(400);
+
+    const project = db.query("SELECT id FROM projects WHERE nama = ?").get("SI-Uji Batal");
+    expect(project).toBeNull();
+  });
+
+  test("satu item gagal dalam submit gabungan membatalkan seluruhnya, termasuk project baru", async () => {
+    const res = await handleSaveTodayInput(
+      req("POST", "/api/task-logs", tenagaToken, {
+        items: [
+          {
+            newTask: { projectBaru: "SI-Uji Gabungan", deskripsi: "Task sah" },
+            jenis: "realisasi",
+            catatan: "Catatan sah",
+            isExtra: true,
+          },
+          { taskId: taskXId, jenis: "realisasi", catatan: "" },
+        ],
+      }),
+      HARI_A,
+    );
+    expect(res.status).toBe(400);
+
+    const project = db.query("SELECT id FROM projects WHERE nama = ?").get("SI-Uji Gabungan");
+    expect(project).toBeNull();
+  });
+});
+
 describe("Otorisasi", () => {
   test("GET tanpa login ditolak", () => {
     const res = handleGetTodayInput(req("GET", "/api/task-logs/today"), HARI_A);

@@ -17,11 +17,27 @@ const {
   handleListProjects,
   handleListMyProjects,
   handleCreateProject,
+  handleConfirmProject,
+  handleMergeProject,
   handleUpdateProject,
   handleAddMember,
   handleEndMembership,
   isActiveProjectMember,
 } = await import("../src/routes/projects");
+
+// Usulan "Lainnya" (ADR-0042) dibuat oleh handleSaveTodayInput (task-logs), bukan endpoint di
+// modul ini — untuk test konfirmasi/gabung di sini, project usulan disiapkan langsung ke DB.
+function createPendingProject(nama: string, memberUserId: number): number {
+  const result = db
+    .query("INSERT INTO projects (nama, is_active, belum_direkonsiliasi) VALUES (?, 1, 1)")
+    .run(nama);
+  const projectId = Number(result.lastInsertRowid);
+  db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
+    memberUserId,
+    projectId,
+  );
+  return projectId;
+}
 
 const ADMIN_EMAIL = "admin.projects@example.test";
 const TENAGA_EMAIL = "tenaga.projects@example.test";
@@ -217,5 +233,109 @@ describe("PUT /api/projects/:id", () => {
       9999,
     );
     expect(res.status).toBe(404);
+  });
+});
+
+// ADR-0042: opsi "Lainnya" pada input harian — usulan project dengan keanggotaan otomatis,
+// dibuat oleh handleSaveTodayInput (lihat server/tests/task-logs.test.ts), direkonsiliasi
+// admin di sini lewat konfirmasi atau digabung ke project existing.
+describe("POST /api/projects/:id/konfirmasi", () => {
+  let usulanId: number;
+
+  beforeAll(() => {
+    usulanId = createPendingProject("Usulan Konfirmasi", tenagaId);
+  });
+
+  test("ditolak untuk non-admin", async () => {
+    const res = await handleConfirmProject(req("POST", `/api/projects/${usulanId}/konfirmasi`, tenagaToken), usulanId);
+    expect(res.status).toBe(403);
+  });
+
+  test("admin berhasil mengonfirmasi, flag hilang", async () => {
+    const res = await handleConfirmProject(req("POST", `/api/projects/${usulanId}/konfirmasi`, adminToken), usulanId);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { project: { belumDirekonsiliasi: boolean } };
+    expect(body.project.belumDirekonsiliasi).toBe(false);
+  });
+
+  test("dikonfirmasi dua kali ditolak (409), bukan project usulan lagi", async () => {
+    const res = await handleConfirmProject(req("POST", `/api/projects/${usulanId}/konfirmasi`, adminToken), usulanId);
+    expect(res.status).toBe(409);
+  });
+
+  test("404 kalau project tidak ada", async () => {
+    const res = await handleConfirmProject(req("POST", "/api/projects/9999/konfirmasi", adminToken), 9999);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/projects/:id/gabung", () => {
+  let usulanId: number;
+  let targetId: number;
+
+  beforeAll(async () => {
+    usulanId = createPendingProject("Usulan Gabung", tenagaId);
+
+    const targetRes = await handleCreateProject(
+      req("POST", "/api/projects", adminToken, { nama: "Project Resmi Tujuan", isActive: true }),
+    );
+    targetId = ((await targetRes.json()) as { project: { id: number } }).project.id;
+
+    db.query("INSERT INTO tasks (project_id, deskripsi) VALUES (?, ?)").run(usulanId, "Task di project usulan");
+  });
+
+  test("ditolak untuk non-admin", async () => {
+    const res = await handleMergeProject(
+      req("POST", `/api/projects/${usulanId}/gabung`, tenagaToken, { targetProjectId: targetId }),
+      usulanId,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  test("ditolak kalau target dan sumber sama", async () => {
+    const res = await handleMergeProject(
+      req("POST", `/api/projects/${usulanId}/gabung`, adminToken, { targetProjectId: usulanId }),
+      usulanId,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  test("admin berhasil menggabungkan: task pindah, anggota ikut pindah, project usulan hilang", async () => {
+    const res = await handleMergeProject(
+      req("POST", `/api/projects/${usulanId}/gabung`, adminToken, { targetProjectId: targetId }),
+      usulanId,
+    );
+    expect(res.status).toBe(200);
+
+    const task = db
+      .query<{ project_id: number }, [string]>("SELECT project_id FROM tasks WHERE deskripsi = ?")
+      .get("Task di project usulan");
+    expect(task?.project_id).toBe(targetId);
+
+    expect(isActiveProjectMember(tenagaId, targetId)).toBe(true);
+
+    const stillExists = db.query<{ id: number }, [number]>("SELECT id FROM projects WHERE id = ?").get(usulanId);
+    expect(stillExists).toBeNull();
+  });
+
+  test("404 kalau project usulan sudah tidak ada (sudah digabung)", async () => {
+    const res = await handleMergeProject(
+      req("POST", `/api/projects/${usulanId}/gabung`, adminToken, { targetProjectId: targetId }),
+      usulanId,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  test("409 kalau sumber bukan project usulan (belum_direkonsiliasi = 0)", async () => {
+    const anotherRes = await handleCreateProject(
+      req("POST", "/api/projects", adminToken, { nama: "Project Resmi Lain", isActive: true }),
+    );
+    const anotherId = ((await anotherRes.json()) as { project: { id: number } }).project.id;
+
+    const res = await handleMergeProject(
+      req("POST", `/api/projects/${targetId}/gabung`, adminToken, { targetProjectId: anotherId }),
+      targetId,
+    );
+    expect(res.status).toBe(409);
   });
 });

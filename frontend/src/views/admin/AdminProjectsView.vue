@@ -4,7 +4,7 @@ import { useForm } from "vee-validate";
 import { toTypedSchema } from "@vee-validate/zod";
 import { z } from "zod";
 import { toast } from "vue-sonner";
-import { Pencil, Plus, Users, X } from "@lucide/vue";
+import { Check, Merge, Pencil, Plus, Users, X } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -48,8 +48,10 @@ import { ApiError, type Project } from "@/lib/api";
 import { useUsersQuery } from "@/composables/useUsers";
 import {
   useAddProjectMember,
+  useConfirmProject,
   useCreateProject,
   useEndProjectMembership,
+  useMergeProject,
   useProjectsQuery,
   useUpdateProject,
 } from "@/composables/useProjects";
@@ -60,6 +62,8 @@ const createProjectMutation = useCreateProject();
 const updateProjectMutation = useUpdateProject();
 const addMemberMutation = useAddProjectMember();
 const endMembershipMutation = useEndProjectMembership();
+const confirmProjectMutation = useConfirmProject();
+const mergeProjectMutation = useMergeProject();
 
 const projects = computed(() => projectsQuery.data.value?.projects ?? []);
 const users = computed(() => usersQuery.data.value?.users ?? []);
@@ -156,6 +160,42 @@ async function removeMember(userId: number) {
     toast.error(err instanceof ApiError ? err.message : "Gagal mengeluarkan anggota.");
   }
 }
+
+// --- Rekonsiliasi usulan "Lainnya" (ADR-0042) ---
+async function confirmUsulan(project: Project) {
+  try {
+    await confirmProjectMutation.mutateAsync(project.id);
+    toast.success(`"${project.nama}" dikonfirmasi jadi project resmi.`);
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "Gagal mengonfirmasi project.");
+  }
+}
+
+const mergeDialogOpen = ref(false);
+const mergeSourceId = ref<number | null>(null);
+const mergeTargetId = ref<string>("");
+
+const mergeSource = computed(() => projects.value.find((p) => p.id === mergeSourceId.value) ?? null);
+const mergeTargetOptions = computed(() =>
+  projects.value.filter((p) => p.id !== mergeSourceId.value && !p.belumDirekonsiliasi),
+);
+
+function openMerge(project: Project) {
+  mergeSourceId.value = project.id;
+  mergeTargetId.value = "";
+  mergeDialogOpen.value = true;
+}
+
+async function confirmMerge() {
+  if (!mergeSourceId.value || !mergeTargetId.value) return;
+  try {
+    await mergeProjectMutation.mutateAsync({ id: mergeSourceId.value, targetProjectId: Number(mergeTargetId.value) });
+    toast.success(`"${mergeSource.value?.nama}" digabungkan.`);
+    mergeDialogOpen.value = false;
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "Gagal menggabungkan project.");
+  }
+}
 </script>
 
 <template>
@@ -231,9 +271,12 @@ async function removeMember(userId: number) {
           <TableRow v-for="project in projects" :key="project.id">
             <TableCell class="font-medium">{{ project.nama }}</TableCell>
             <TableCell>
-              <Badge :variant="project.isActive ? 'default' : 'secondary'">
-                {{ project.isActive ? "Aktif" : "Nonaktif" }}
-              </Badge>
+              <div class="flex flex-wrap gap-1">
+                <Badge :variant="project.isActive ? 'default' : 'secondary'">
+                  {{ project.isActive ? "Aktif" : "Nonaktif" }}
+                </Badge>
+                <Badge v-if="project.belumDirekonsiliasi" variant="destructive">Usulan "Lainnya"</Badge>
+              </div>
             </TableCell>
             <TableCell>
               <div v-if="project.members.length > 0" class="flex flex-wrap gap-1">
@@ -242,6 +285,27 @@ async function removeMember(userId: number) {
               <span v-else class="text-sm text-muted-foreground">Belum ada anggota</span>
             </TableCell>
             <TableCell class="text-right">
+              <Button
+                v-if="project.belumDirekonsiliasi"
+                variant="ghost"
+                size="icon"
+                aria-label="Konfirmasi jadi project resmi"
+                title="Konfirmasi jadi project resmi"
+                :disabled="confirmProjectMutation.isPending.value"
+                @click="confirmUsulan(project)"
+              >
+                <Check class="size-4" />
+              </Button>
+              <Button
+                v-if="project.belumDirekonsiliasi"
+                variant="ghost"
+                size="icon"
+                aria-label="Gabungkan ke project lain"
+                title="Gabungkan ke project lain"
+                @click="openMerge(project)"
+              >
+                <Merge class="size-4" />
+              </Button>
               <Button variant="ghost" size="icon" aria-label="Kelola anggota" @click="openMembers(project)">
                 <Users class="size-4" />
               </Button>
@@ -299,6 +363,35 @@ async function removeMember(userId: number) {
               Tambah
             </Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="mergeDialogOpen">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Gabungkan "{{ mergeSource?.nama }}"</DialogTitle>
+        </DialogHeader>
+
+        <div class="grid gap-4">
+          <p class="text-sm text-muted-foreground">
+            Semua task dan anggota project ini dipindah ke project tujuan, lalu usulan ini dihapus.
+          </p>
+          <Select v-model="mergeTargetId">
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Pilih project tujuan" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="p in mergeTargetOptions" :key="p.id" :value="String(p.id)">
+                {{ p.nama }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button :disabled="!mergeTargetId || mergeProjectMutation.isPending.value" @click="confirmMerge">
+              {{ mergeProjectMutation.isPending.value ? "Menggabungkan..." : "Gabungkan" }}
+            </Button>
+          </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>

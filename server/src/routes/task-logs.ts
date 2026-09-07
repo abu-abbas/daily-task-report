@@ -76,16 +76,25 @@ export function handleGetTodayInput(req: Request, tanggalOverride?: string): Res
   return json({ tanggal, hariKerjaSebelumnya, checklist, tambahan, rencanaHariIni });
 }
 
+// projectBaru (bukan projectId): usulan project "Lainnya" (ADR-0042) dibuat di saveItem()
+// dalam transaksi yang sama dengan task-nya, bukan lebih dulu secara terpisah lewat
+// /projects/usulan — supaya draft yang batal/di-refresh sebelum "Simpan" tidak menyisakan
+// project nyantol tanpa task/catatan apa pun (simpan tetap semua-atau-tidak-sama-sekali).
+const newTaskSchema = z
+  .object({
+    projectId: z.number().int().positive().optional(),
+    projectBaru: z.string().min(1).optional(),
+    deskripsi: z.string().min(1, "Deskripsi task wajib diisi."),
+    tag: z.string().optional(),
+  })
+  .refine((v) => (v.projectId !== undefined) !== (v.projectBaru !== undefined), {
+    message: "Isi salah satu: projectId atau projectBaru pada newTask.",
+  });
+
 const logItemSchema = z
   .object({
     taskId: z.number().int().positive().optional(),
-    newTask: z
-      .object({
-        projectId: z.number().int().positive(),
-        deskripsi: z.string().min(1, "Deskripsi task wajib diisi."),
-        tag: z.string().optional(),
-      })
-      .optional(),
+    newTask: newTaskSchema.optional(),
     jenis: z.enum(["rencana", "realisasi"]),
     catatan: z.string().optional(),
     isExtra: z.boolean().optional(),
@@ -147,11 +156,13 @@ export async function handleSaveTodayInput(req: Request, tanggalOverride?: strin
   const hariKerjaSebelumnya = previousWorkday(tanggal);
 
   // Validasi seluruh item DULU sebelum menulis apa pun — kegagalan satu bagian tidak boleh
-  // menyisakan simpan parsial (cakupan Stage 3).
+  // menyisakan simpan parsial (cakupan Stage 3). projectBaru dilewati di sini: project dan
+  // keanggotaannya baru dibuat (dan otomatis sah) di saveItem(), belum ada project_id untuk dicek.
   for (const item of parsed.data.items) {
     if (item.jenis === "realisasi" && !item.catatan?.trim()) {
       return errorResponse(400, "Catatan hasil wajib diisi untuk realisasi.");
     }
+    if (item.newTask?.projectBaru !== undefined) continue;
     const projectId = item.newTask?.projectId ?? getTaskProjectId(item.taskId!);
     if (projectId === null) return errorResponse(404, "Task tidak ditemukan.");
     if (!isActiveProjectMember(ctx.user.id, projectId)) {
@@ -159,12 +170,29 @@ export async function handleSaveTodayInput(req: Request, tanggalOverride?: strin
     }
   }
 
+  // ADR-0042: usulan "Lainnya" dibuat di sini, dalam transaksi yang sama dengan task & log-nya
+  // (bukan lebih dulu lewat endpoint terpisah) — supaya project baru tidak pernah nyantol tanpa
+  // task/catatan kalau submit ini gagal atau dibatalkan.
+  function resolveProjectId(newTask: NonNullable<LogItem["newTask"]>): number {
+    if (newTask.projectId !== undefined) return newTask.projectId;
+    const result = db
+      .query("INSERT INTO projects (nama, is_active, belum_direkonsiliasi) VALUES (?, 1, 1)")
+      .run(newTask.projectBaru!);
+    const projectId = Number(result.lastInsertRowid);
+    db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
+      ctx!.user.id,
+      projectId,
+    );
+    return projectId;
+  }
+
   function saveItem(item: LogItem) {
     let taskId = item.taskId;
     if (taskId === undefined && item.newTask) {
+      const projectId = resolveProjectId(item.newTask);
       const result = db
         .query("INSERT INTO tasks (project_id, deskripsi, tag) VALUES (?, ?, ?)")
-        .run(item.newTask.projectId, item.newTask.deskripsi, item.newTask.tag ?? null);
+        .run(projectId, item.newTask.deskripsi, item.newTask.tag ?? null);
       taskId = Number(result.lastInsertRowid);
     }
     const tanggalItem = item.jenis === "realisasi" ? hariKerjaSebelumnya : tanggal;

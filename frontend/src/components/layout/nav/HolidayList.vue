@@ -48,7 +48,7 @@ const kelompok = computed(() => [
 
 <template>
   <template v-for="(grup, index) in kelompok" :key="grup.nama">
-    <SidebarGroup v-if="grup.items.length > 0" class="py-0">
+    <SidebarGroup v-if="grup.items.length > 0" class="py-2.5">
       <Collapsible :default-open="index === 0" class="group/collapsible">
         <SidebarGroupLabel as-child class="group/label w-full text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
           <CollapsibleTrigger>
