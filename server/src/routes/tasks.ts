@@ -10,7 +10,10 @@ interface TaskRow {
   deskripsi: string;
   tag: string | null;
   status: string;
+  deskripsi_penutupan: string | null;
 }
+
+const TASK_COLUMNS = "id, project_id, deskripsi, tag, status, deskripsi_penutupan";
 
 function publicTask(row: TaskRow) {
   return {
@@ -19,7 +22,12 @@ function publicTask(row: TaskRow) {
     deskripsi: row.deskripsi,
     tag: row.tag,
     status: row.status,
+    deskripsiPenutupan: row.deskripsi_penutupan,
   };
+}
+
+function getTask(taskId: number): TaskRow | null {
+  return db.query<TaskRow, [number]>(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = ?`).get(taskId);
 }
 
 // Task tidak punya pemilik tetap (ADR-0010); dibaca-tulis siapa pun anggota aktif project-nya
@@ -40,7 +48,7 @@ export function handleListTasks(req: Request): Response {
 
   const rows = db
     .query<TaskRow, [number]>(
-      "SELECT id, project_id, deskripsi, tag, status FROM tasks WHERE project_id = ? AND status = 'open' ORDER BY deskripsi",
+      `SELECT ${TASK_COLUMNS} FROM tasks WHERE project_id = ? AND status = 'open' ORDER BY deskripsi`,
     )
     .all(projectId);
   return json({ tasks: rows.map(publicTask) });
@@ -69,10 +77,50 @@ export async function handleCreateTask(req: Request): Promise<Response> {
     .query("INSERT INTO tasks (project_id, deskripsi, tag) VALUES (?, ?, ?)")
     .run(parsed.data.projectId, parsed.data.deskripsi, parsed.data.tag ?? null);
 
-  const row = db
-    .query<TaskRow, [number]>(
-      "SELECT id, project_id, deskripsi, tag, status FROM tasks WHERE id = ?",
-    )
-    .get(Number(result.lastInsertRowid))!;
+  const row = getTask(Number(result.lastInsertRowid))!;
   return json({ task: publicTask(row) }, { status: 201 });
+}
+
+const closeTaskSchema = z.object({
+  deskripsiPenutupan: z.string().optional(),
+});
+
+// ADR-0012/Q-04: siapa pun anggota aktif project-nya boleh menutup (task tanpa pemilik tetap,
+// konsisten ADR-0010/ADR-0005). Tidak ada reopen (YAGNI, belum dibutuhkan). Rencana yang belum
+// direalisasi di task ini dihapus otomatis saat ditutup — pola sama dengan izin menghapus
+// rencana lama (ADR-0044) — supaya task closed tidak nyantol jadi item checklist besok.
+export async function handleCloseTask(req: Request, taskId: number): Promise<Response> {
+  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
+  const ctx = getAuthContext(token);
+  if (!ctx) return errorResponse(401, "Belum login.");
+
+  const body = await req.json().catch(() => ({}));
+  const parsed = closeTaskSchema.safeParse(body);
+  if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
+
+  const task = getTask(taskId);
+  if (!task) return errorResponse(404, "Task tidak ditemukan.");
+  if (!isActiveProjectMember(ctx.user.id, task.project_id)) {
+    return errorResponse(403, "Bukan anggota aktif project ini.");
+  }
+  if (task.status === "closed") return errorResponse(409, "Task sudah ditutup.");
+
+  const deskripsiPenutupan = parsed.data.deskripsiPenutupan?.trim() || null;
+
+  db.transaction(() => {
+    db.query("UPDATE tasks SET status = 'closed', deskripsi_penutupan = ? WHERE id = ?").run(
+      deskripsiPenutupan,
+      taskId,
+    );
+    db.query(
+      `DELETE FROM task_logs
+       WHERE task_id = ? AND jenis = 'rencana'
+       AND NOT EXISTS (
+         SELECT 1 FROM task_logs r
+         WHERE r.task_id = task_logs.task_id AND r.jenis = 'realisasi' AND r.tanggal = task_logs.tanggal
+       )`,
+    ).run(taskId);
+  })();
+
+  return json({ task: publicTask(getTask(taskId)!) });
 }

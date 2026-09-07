@@ -23,7 +23,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import TaskPickerForm from "@/components/input-harian/TaskPickerForm.vue";
 import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
 import MiniMarkdownEditor from "@/components/input-harian/MiniMarkdownEditor.vue";
@@ -32,6 +40,7 @@ import { ApiError, type IzinJenis, type SaveTaskLogItem } from "@/lib/api";
 import { groupByProject } from "@/lib/groupByProject";
 import { formatTanggalPanjang } from "@/lib/locale";
 import { useCancelLeave, useDailyInputQuery, useSaveDailyInput, useSaveLeave } from "@/composables/useTaskLogs";
+import { useCloseTask } from "@/composables/useTasks";
 
 const route = useRoute();
 const router = useRouter();
@@ -147,6 +156,33 @@ function removeTambahan(key: number) {
 }
 function removeRencana(key: number) {
   rencanaDrafts.value = rencanaDrafts.value.filter((d) => d.key !== key);
+}
+
+// Menutup task (ADR-0012/Q-04) — dialog tunggal dipakai ulang buat task mana pun yang diklik
+// "Tandai selesai", plain textarea (bukan MiniMarkdownEditor) buat deskripsi penutupan opsional.
+const closeTaskMutation = useCloseTask();
+const closeDialogOpen = ref(false);
+const closingTask = ref<{ id: number; deskripsi: string } | null>(null);
+const closeDeskripsi = ref("");
+
+function openCloseDialog(task: { taskId: number; deskripsi: string }) {
+  closingTask.value = { id: task.taskId, deskripsi: task.deskripsi };
+  closeDeskripsi.value = "";
+  closeDialogOpen.value = true;
+}
+
+async function confirmCloseTask() {
+  if (!closingTask.value) return;
+  try {
+    await closeTaskMutation.mutateAsync({
+      taskId: closingTask.value.id,
+      deskripsiPenutupan: closeDeskripsi.value.trim() || undefined,
+    });
+    toast.success(`Task "${closingTask.value.deskripsi}" ditutup.`);
+    closeDialogOpen.value = false;
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "Gagal menutup task, coba lagi.");
+  }
 }
 
 // Izin/cuti/sakit (ADR-0013/0044) — toggle menyembunyikan form rencana tanggal ini, diganti
@@ -328,7 +364,12 @@ const rencanaTersimpanAkanDihapus = computed(() =>
               <div v-for="group in tambahanGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
                 <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
                 <div v-for="t in group.items" :key="t.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
-                  <p class="font-medium">{{ t.deskripsi }}</p>
+                  <div class="flex items-start justify-between gap-2">
+                    <p class="font-medium">{{ t.deskripsi }}</p>
+                    <Button variant="ghost" size="sm" class="h-auto shrink-0 px-2 py-0.5 text-xs" @click="openCloseDialog(t)">
+                      Tandai selesai
+                    </Button>
+                  </div>
                   <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
                 </div>
               </div>
@@ -399,7 +440,12 @@ const rencanaTersimpanAkanDihapus = computed(() =>
               <div v-for="group in rencanaGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
                 <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
                 <div v-for="r in group.items" :key="r.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
-                  <p class="font-medium">{{ r.deskripsi }}</p>
+                  <div class="flex items-start justify-between gap-2">
+                    <p class="font-medium">{{ r.deskripsi }}</p>
+                    <Button variant="ghost" size="sm" class="h-auto shrink-0 px-2 py-0.5 text-xs" @click="openCloseDialog(r)">
+                      Tandai selesai
+                    </Button>
+                  </div>
                   <MiniMarkdownText v-if="r.catatan" :text="r.catatan" class="text-xs text-muted-foreground" />
                 </div>
               </div>
@@ -459,6 +505,23 @@ const rencanaTersimpanAkanDihapus = computed(() =>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog v-model:open="closeDialogOpen">
+        <DialogContent class="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tandai "{{ closingTask?.deskripsi }}" selesai?</DialogTitle>
+          </DialogHeader>
+          <Textarea v-model="closeDeskripsi" placeholder="Deskripsi penutupan (opsional)" rows="3" />
+          <DialogFooter>
+            <DialogClose as-child>
+              <Button type="button" variant="outline" :disabled="closeTaskMutation.isPending.value">Batal</Button>
+            </DialogClose>
+            <Button :disabled="closeTaskMutation.isPending.value" @click="confirmCloseTask">
+              {{ closeTaskMutation.isPending.value ? "Menutup..." : "Ya, tutup task" }}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </template>
   </div>
 </template>

@@ -8,7 +8,7 @@ process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test
 const { db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
-const { handleListTasks, handleCreateTask } = await import("../src/routes/tasks");
+const { handleListTasks, handleCreateTask, handleCloseTask } = await import("../src/routes/tasks");
 
 const TENAGA_EMAIL = "tenaga.tasks@example.test";
 const LUAR_EMAIL = "luar.tasks@example.test";
@@ -117,6 +117,81 @@ describe("POST /api/tasks", () => {
     const res = handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, tenagaToken));
     return res.json().then((body: { tasks: { deskripsi: string }[] }) => {
       expect(body.tasks.some((t) => t.deskripsi === "Setup CI")).toBe(true);
+    });
+  });
+});
+
+// ADR-0012/Q-04: siapa pun anggota aktif boleh menutup, rencana belum direalisasi dihapus
+// otomatis, tidak ada reopen.
+describe("POST /api/tasks/:id/tutup", () => {
+  let taskId: number;
+
+  beforeAll(async () => {
+    const res = await handleCreateTask(
+      req("POST", "/api/tasks", tenagaToken, { projectId, deskripsi: "Task Ditutup" }),
+    );
+    taskId = ((await res.json()) as { task: { id: number } }).task.id;
+
+    // Rencana belum direalisasi — harus terhapus saat task ditutup.
+    db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-10', 'rencana')").run(
+      taskId,
+      tenagaId,
+    );
+    // Rencana yang sudah punya realisasi — harus tetap ada (histori valid).
+    db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-09', 'rencana')").run(
+      taskId,
+      tenagaId,
+    );
+    db.query(
+      "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2026-09-09', 'realisasi', 'Beres')",
+    ).run(taskId, tenagaId);
+  });
+
+  test("ditolak tanpa login", async () => {
+    const res = await handleCloseTask(req("POST", `/api/tasks/${taskId}/tutup`), taskId);
+    expect(res.status).toBe(401);
+  });
+
+  test("ditolak untuk yang bukan anggota aktif project", async () => {
+    const res = await handleCloseTask(req("POST", `/api/tasks/${taskId}/tutup`, luarToken, {}), taskId);
+    expect(res.status).toBe(403);
+  });
+
+  test("task tidak ditemukan (404)", async () => {
+    const res = await handleCloseTask(req("POST", "/api/tasks/999999/tutup", tenagaToken, {}), 999999);
+    expect(res.status).toBe(404);
+  });
+
+  test("berhasil menutup dengan deskripsi; rencana belum direalisasi hilang, yang sudah direalisasi tetap ada", async () => {
+    const res = await handleCloseTask(
+      req("POST", `/api/tasks/${taskId}/tutup`, tenagaToken, { deskripsiPenutupan: "Sudah kelar semua" }),
+      taskId,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { task: { status: string; deskripsiPenutupan: string } };
+    expect(body.task.status).toBe("closed");
+    expect(body.task.deskripsiPenutupan).toBe("Sudah kelar semua");
+
+    const belumRealisasi = db
+      .query("SELECT id FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-10'")
+      .get(taskId);
+    expect(belumRealisasi).toBeNull();
+
+    const sudahRealisasi = db
+      .query("SELECT id FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-09' AND jenis = 'rencana'")
+      .get(taskId);
+    expect(sudahRealisasi).not.toBeNull();
+  });
+
+  test("menutup ulang task yang sudah closed ditolak (409)", async () => {
+    const res = await handleCloseTask(req("POST", `/api/tasks/${taskId}/tutup`, tenagaToken, {}), taskId);
+    expect(res.status).toBe(409);
+  });
+
+  test("task closed tidak lagi muncul di daftar task terbuka", () => {
+    const res = handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, tenagaToken));
+    return res.json().then((body: { tasks: { deskripsi: string }[] }) => {
+      expect(body.tasks.some((t) => t.deskripsi === "Task Ditutup")).toBe(false);
     });
   });
 });

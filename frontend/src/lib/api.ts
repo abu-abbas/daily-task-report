@@ -144,6 +144,7 @@ export interface Task {
   deskripsi: string;
   tag: string | null;
   status: "open" | "closed";
+  deskripsiPenutupan: string | null;
 }
 
 export const fetchTasks = (projectId: number) => api<{ tasks: Task[] }>(`/tasks?projectId=${projectId}`);
@@ -156,6 +157,14 @@ export interface NewTaskPayload {
 
 export const createTask = (payload: NewTaskPayload) =>
   api<{ task: Task }>("/tasks", { method: "POST", body: JSON.stringify(payload) });
+
+// ADR-0012/Q-04: task tanpa pemilik tetap — siapa pun anggota aktif project-nya boleh menutup.
+// Tidak ada endpoint buka-lagi (reopen) sengaja, belum dibutuhkan (YAGNI).
+export const closeTask = (taskId: number, deskripsiPenutupan?: string) =>
+  api<{ task: Task }>(`/tasks/${taskId}/tutup`, {
+    method: "POST",
+    body: JSON.stringify({ deskripsiPenutupan }),
+  });
 
 export interface ChecklistItem {
   taskId: number;

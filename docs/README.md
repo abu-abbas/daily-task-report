@@ -70,6 +70,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0042 | [Usulan project via "Lainnya" dengan rekonsiliasi admin](adr/0042-project-lainnya-usulan.md) |
 | 0043 | [Beranda sebagai preview rencana hari ini, todo-list opsional dalam catatan](adr/0043-beranda-dan-todo-list-rencana.md) |
 | 0044 | [Pilih tanggal laporan, edit data tersimpan, dan form izin](adr/0044-tanggal-laporan-dan-izin.md) |
+| 0045 | [Penutupan task eksplisit dengan deskripsi opsional](adr/0045-penutupan-task.md) |
 
 ## Tahapan pekerjaan
 

@@ -12,7 +12,7 @@ import {
   handleMergeProject,
   handleUpdateProject,
 } from "./routes/projects";
-import { handleCreateTask, handleListTasks } from "./routes/tasks";
+import { handleCloseTask, handleCreateTask, handleListTasks } from "./routes/tasks";
 import { handleGetDailyInput, handleSaveDailyInput } from "./routes/task-logs";
 import { handleCancelLeave, handleSaveLeave } from "./routes/leaves";
 
@@ -46,6 +46,7 @@ Bun.serve({
       DELETE: (req) => handleEndMembership(req, Number(req.params.id), Number(req.params.userId)),
     },
     "/api/tasks": { GET: handleListTasks, POST: handleCreateTask },
+    "/api/tasks/:id/tutup": { POST: (req) => handleCloseTask(req, Number(req.params.id)) },
     "/api/task-logs/daily": { GET: (req) => handleGetDailyInput(req) },
     "/api/task-logs": { POST: (req) => handleSaveDailyInput(req) },
     "/api/leaves": { POST: (req) => handleSaveLeave(req) },

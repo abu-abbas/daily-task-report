@@ -1,8 +1,8 @@
 # Stage 04 — Koreksi laporan, izin, dan penutupan task
 
-- Status: Sebagian selesai — pilih tanggal laporan, edit data tersimpan, dan form izin sudah jalan ([ADR-0044](../adr/0044-tanggal-laporan-dan-izin.md)). Penutupan task (ADR-0012) belum dikerjakan, menunggu Q-04.
+- Status: Selesai — pilih tanggal laporan, edit data tersimpan, form izin ([ADR-0044](../adr/0044-tanggal-laporan-dan-izin.md)), dan penutupan task ([ADR-0045](../adr/0045-penutupan-task.md)) semuanya sudah jalan, teruji, dan diverifikasi visual.
 - Prasyarat: Stage 3.
-- Keputusan: [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0008](../adr/0008-laporan-terlewat.md), [ADR-0009](../adr/0009-edit-submit.md), [ADR-0012](../adr/0012-penutupan-task.md), [ADR-0013](../adr/0013-izin-form.md), [ADR-0014](../adr/0014-izin-realisasi.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0044](../adr/0044-tanggal-laporan-dan-izin.md).
+- Keputusan: [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0008](../adr/0008-laporan-terlewat.md), [ADR-0009](../adr/0009-edit-submit.md), [ADR-0012](../adr/0012-penutupan-task.md), [ADR-0013](../adr/0013-izin-form.md), [ADR-0014](../adr/0014-izin-realisasi.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0044](../adr/0044-tanggal-laporan-dan-izin.md), [ADR-0045](../adr/0045-penutupan-task.md).
 
 ## Cakupan
 
@@ -18,12 +18,12 @@
 - [x] Submit berulang tidak menggandakan data dan edit tidak mengubah log user lain.
 - [x] Kasus awal/akhir bulan mengikuti keputusan tertulis, termasuk realisasi hari kerja sebelumnya.
 - [x] Izin tanggal laporan dapat disimpan bersama realisasi tanggal sebelumnya; konflik tanggal sama ditolak secara atomik.
-- [ ] Penutupan task bekerja dengan atau tanpa deskripsi; catatan hasil realisasi tetap wajib dan berbeda fungsinya.
-- [ ] Task tidak ditutup otomatis oleh realisasi; perilaku rencana yang sudah ada ketika task ditutup telah diuji.
+- [x] Penutupan task bekerja dengan atau tanpa deskripsi; catatan hasil realisasi tetap wajib dan berbeda fungsinya.
+- [x] Task tidak ditutup otomatis oleh realisasi; perilaku rencana yang sudah ada ketika task ditutup telah diuji.
 
 ## Dependensi terbuka
 
-Q-04 (penutupan task) — lihat [daftar keputusan terbuka](../open-decisions.md). Q-01 dan Q-05 sudah selesai untuk bagian input harian.
+Tidak ada — Q-01, Q-04, dan Q-05 sudah selesai untuk seluruh cakupan stage ini. Lihat [daftar keputusan terbuka](../open-decisions.md).
 
 ## Bukti pelaksanaan
 
@@ -40,4 +40,9 @@ Q-04 (penutupan task) — lihat [daftar keputusan terbuka](../open-decisions.md)
 
 - Perbaikan lanjutan dari review user: field "Tanggal laporan" di halaman Input Harian jadi ganda begitu kalender sidebar bisa dipakai navigasi — tapi kalender sidebar (`AppSidebarRight.vue`) cuma tampil di layar besar (`hidden lg:flex`), sedangkan aplikasi ini mobile-first (ADR-0023). Diselesaikan dengan menyembunyikan field itu cuma di breakpoint `lg` ke atas (`lg:hidden` pada wrapper-nya) — tetap satu-satunya cara pilih tanggal di mobile. Field-nya sendiri juga diganti dari `<input type="date">` native jadi `Popover` + `Calendar` shadcn-vue (permintaan user, konsisten dengan pola date-picker lain di app — form tanggal libur admin dan kalender sidebar), pakai `@internationalized/date` (`parseDate`) buat konversi ke/dari string ISO. Diverifikasi lewat Playwright: field cuma muncul di mobile (`isVisible` false di desktop), popover kalender terbuka dan klik tanggal mengubah URL + konten halaman.
 
-Penutupan task belum dikerjakan — putaran kerja terpisah, menunggu jawaban Q-04.
+**Penutupan task** ([ADR-0045](../adr/0045-penutupan-task.md)) — selesai 2026-09-08:
+
+- **Backend**: `server/src/routes/tasks.ts` bertambah `handleCloseTask` (`POST /api/tasks/:id/tutup`, body `{deskripsiPenutupan?}`) — siapa pun anggota aktif project boleh menutup (404 kalau task tidak ada, 403 kalau bukan anggota, 409 kalau sudah closed). Dalam transaksi yang sama: `UPDATE tasks SET status='closed', deskripsi_penutupan=?` lalu hapus baris `task_logs` jenis rencana yang belum punya realisasi pasangannya (`NOT EXISTS` per task+tanggal) — rencana yang sudah direalisasi tetap dipertahankan sebagai histori. Tidak ada endpoint reopen (YAGNI).
+- **Test otomatis**: `server/tests/tasks.test.ts` bertambah dari 8 ke 13 test (otorisasi, 404/409, rencana belum-direalisasi terhapus vs yang sudah-direalisasi tetap ada, task closed hilang dari daftar terbuka). Total 104 test lolos lintas file.
+- **Frontend**: tombol "Tandai selesai" di tiap task pada kartu "Kerjaan tambahan" dan "Rencana" (`InputHarianView.vue`), satu Dialog dipakai ulang untuk task mana pun yang diklik, textarea polos (bukan `MiniMarkdownEditor`, sesuai arahan user) buat deskripsi penutupan opsional. `useCloseTask()` (baru, `composables/useTasks.ts`) invalidate query daftar task dan query harian sekaligus (menutup task bisa mengubah `rencanaHariIni`).
+- **Diverifikasi end-to-end** lewat Playwright (akun uji sementara, dihapus setelah selesai): task dengan rencana hari ini → klik "Tandai selesai" → isi deskripsi opsional → konfirmasi → toast sukses → task hilang dari kartu "Rencana" (rencana yang belum direalisasi ikut terhapus, sesuai desain).
