@@ -172,6 +172,7 @@ export interface ChecklistItem {
   tag: string | null;
   projectId: number;
   projectNama: string;
+  rencanaCatatan: string | null;
   realisasiCatatan: string | null;
 }
 

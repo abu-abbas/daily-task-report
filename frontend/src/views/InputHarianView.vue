@@ -97,7 +97,12 @@ watch(
     if (!d) return;
     const drafts: Record<number, ChecklistDraft> = {};
     for (const item of d.checklist) {
-      drafts[item.taskId] = { checked: item.realisasiCatatan !== null, catatan: item.realisasiCatatan ?? "" };
+      // Belum pernah realisasi? Mulai dari catatan rencananya (mis. checklist markdown yang
+      // sudah ditulis kemarin) alih-alih kosong — tinggal dicentang/dilengkapi, bukan nulis ulang.
+      drafts[item.taskId] = {
+        checked: item.realisasiCatatan !== null,
+        catatan: item.realisasiCatatan ?? item.rencanaCatatan ?? "",
+      };
     }
     checklistDrafts.value = drafts;
   },

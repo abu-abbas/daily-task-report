@@ -13,6 +13,10 @@ interface ChecklistRow {
   projectNama: string;
 }
 
+interface RencanaChecklistRow extends ChecklistRow {
+  rencanaCatatan: string | null;
+}
+
 const TANGGAL_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Checklist realisasi hari ini = rencana milik user pada hari kerja sebelumnya (ADR-0006).
@@ -39,9 +43,12 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
   }
   const hariKerjaSebelumnya = previousWorkday(tanggal);
 
+  // rencanaCatatan (bukan cuma deskripsi/badge) ikut dikirim supaya checklist-di-dalam-catatan
+  // rencana (ADR-0043) tetap terlihat sebagai referensi saat mengisi realisasi besok — sebelumnya
+  // hilang total begitu rencana jadi item checklist, user tidak bisa lihat lagi apa yang direncanakan.
   const checklistRows = db
-    .query<ChecklistRow, [number, string]>(
-      `SELECT tl.task_id AS taskId, t.deskripsi, t.tag, t.project_id AS projectId, p.nama AS projectNama
+    .query<RencanaChecklistRow, [number, string]>(
+      `SELECT tl.task_id AS taskId, tl.catatan AS rencanaCatatan, t.deskripsi, t.tag, t.project_id AS projectId, p.nama AS projectNama
        FROM task_logs tl
        JOIN tasks t ON t.id = tl.task_id
        JOIN projects p ON p.id = t.project_id

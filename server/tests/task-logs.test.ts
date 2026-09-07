@@ -160,9 +160,16 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
 describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   test("checklist berisi Task X dan Task Y dari rencana Hari A", async () => {
     const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
-    const body = (await res.json()) as { checklist: { taskId: number; realisasiCatatan: string | null }[] };
+    const body = (await res.json()) as {
+      checklist: { taskId: number; realisasiCatatan: string | null; rencanaCatatan: string | null }[];
+    };
     expect(body.checklist.map((c) => c.taskId).sort()).toEqual([taskXId, taskYId].sort());
     expect(body.checklist.every((c) => c.realisasiCatatan === null)).toBe(true);
+
+    // ADR-0043/review user: catatan rencana (termasuk checklist markdown) harus tetap terlihat
+    // di checklist realisasi besoknya, bukan hilang begitu rencana jadi item checklist.
+    const taskX = body.checklist.find((c) => c.taskId === taskXId);
+    expect(taskX?.rencanaCatatan).toBe("- [ ] siapkan draft\n- [x] baca dokumen");
   });
 
   test("centang Task X saja (realisasi sebagian) + tambahan + rencana baru", async () => {
