@@ -138,6 +138,23 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
     );
     expect(res.status).toBe(200);
   });
+
+  // ADR-0043: catatan rencana boleh berisi checkbox markdown, dibaca balik apa adanya lewat
+  // GET /task-logs/today — todo-list opsional ini bukan data terstruktur.
+  test("catatan rencana dengan checkbox markdown tersimpan dan terbaca balik", async () => {
+    const catatan = "- [ ] siapkan draft\n- [x] baca dokumen";
+    const saveRes = await handleSaveTodayInput(
+      req("POST", "/api/task-logs", tenagaToken, {
+        items: [{ taskId: taskXId, jenis: "rencana", catatan }],
+      }),
+      HARI_A,
+    );
+    expect(saveRes.status).toBe(200);
+
+    const getRes = handleGetTodayInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
+    const body = (await getRes.json()) as { rencanaHariIni: { taskId: number; catatan: string | null }[] };
+    expect(body.rencanaHariIni.find((r) => r.taskId === taskXId)?.catatan).toBe(catatan);
+  });
 });
 
 describe("Hari B — realisasi sebagian dari rencana Hari A", () => {

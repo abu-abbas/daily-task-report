@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
+import { Plus } from "@lucide/vue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -16,13 +18,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import TaskPickerForm from "@/components/input-harian/TaskPickerForm.vue";
+import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
 import MiniMarkdownEditor from "@/components/input-harian/MiniMarkdownEditor.vue";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
 import { ApiError, type SaveTaskLogItem } from "@/lib/api";
 import { formatTanggalPanjang } from "@/lib/locale";
 import { useSaveTodayInput, useTodayInputQuery } from "@/composables/useTaskLogs";
 
+const router = useRouter();
 const query = useTodayInputQuery();
 const saveMutation = useSaveTodayInput();
 const data = computed(() => query.data.value);
@@ -48,6 +53,17 @@ watch(
 
 const checklistEmpty = computed(() => (data.value?.checklist.length ?? 0) === 0);
 
+// Dipakai TaskPickerForm buat isi ulang catatan saat task yang sudah tersimpan hari ini dipilih
+// lagi lewat "Task terbuka" — cegah submit ulang menimpa catatan lama (mis. todo-list checklist)
+// jadi hilang, karena simpan itu replace, bukan gabung (ADR-0043).
+function catatanByTaskId(items: { taskId: number; catatan: string | null }[] | undefined): Record<number, string> {
+  const map: Record<number, string> = {};
+  for (const item of items ?? []) map[item.taskId] = item.catatan ?? "";
+  return map;
+}
+const tambahanCatatanByTaskId = computed(() => catatanByTaskId(data.value?.tambahan));
+const rencanaCatatanByTaskId = computed(() => catatanByTaskId(data.value?.rencanaHariIni));
+
 interface DraftItem {
   key: number;
   taskId?: number;
@@ -62,22 +78,22 @@ function draftLabel(d: DraftItem): string {
   return d.newTask ? d.newTask.deskripsi : `Task #${d.taskId}`;
 }
 
+const tambahanDialogOpen = ref(false);
+const rencanaDialogOpen = ref(false);
+
 function addTambahan(payload: Omit<DraftItem, "key">) {
   tambahanDrafts.value.push({ ...payload, key: draftKeySeq++ });
+  tambahanDialogOpen.value = false;
 }
 function addRencana(payload: Omit<DraftItem, "key">) {
   rencanaDrafts.value.push({ ...payload, key: draftKeySeq++ });
+  rencanaDialogOpen.value = false;
 }
 function removeTambahan(key: number) {
   tambahanDrafts.value = tambahanDrafts.value.filter((d) => d.key !== key);
 }
 function removeRencana(key: number) {
   rencanaDrafts.value = rencanaDrafts.value.filter((d) => d.key !== key);
-}
-
-const tambahanSection = ref<HTMLElement | null>(null);
-function scrollToTambahan() {
-  tambahanSection.value?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 const checklistInvalid = computed(() =>
@@ -99,7 +115,7 @@ const itemsToSave = computed<SaveTaskLogItem[]>(() => {
     items.push({ taskId: d.taskId, newTask: d.newTask, jenis: "realisasi", catatan: d.catatan, isExtra: true });
   }
   for (const d of rencanaDrafts.value) {
-    items.push({ taskId: d.taskId, newTask: d.newTask, jenis: "rencana" });
+    items.push({ taskId: d.taskId, newTask: d.newTask, jenis: "rencana", catatan: d.catatan });
   }
   return items;
 });
@@ -115,6 +131,7 @@ async function confirmSave() {
     tambahanDrafts.value = [];
     rencanaDrafts.value = [];
     confirmOpen.value = false;
+    router.push("/");
   } catch (err) {
     confirmOpen.value = false;
     toast.error(err instanceof ApiError ? err.message : "Gagal menyimpan, coba lagi.");
@@ -150,7 +167,7 @@ const ringkasan = computed(() => {
         <CardContent class="grid gap-4">
           <div v-if="checklistEmpty" class="grid gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
             <p>Tidak ada rencana tercatat untuk hari kerja sebelumnya.</p>
-            <Button type="button" size="sm" variant="outline" class="justify-self-start" @click="scrollToTambahan">
+            <Button type="button" size="sm" variant="outline" class="justify-self-start" @click="tambahanDialogOpen = true">
               Tambah kerjaan kemarin (manual)
             </Button>
           </div>
@@ -166,7 +183,7 @@ const ringkasan = computed(() => {
                 <span class="grid gap-1">
                   <span class="font-medium">{{ item.deskripsi }}</span>
                   <span class="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                    <Badge variant="outline">{{ item.projectNama }}</Badge>
+                    <ProjectBadge :nama="item.projectNama" />
                     <Badge v-if="item.tag" variant="secondary">{{ item.tag }}</Badge>
                   </span>
                 </span>
@@ -189,13 +206,13 @@ const ringkasan = computed(() => {
 
           <Separator />
 
-          <div ref="tambahanSection" class="grid gap-3">
+          <div class="grid gap-3">
             <h3 class="text-sm font-medium">Kerjaan tambahan</h3>
 
             <div v-if="data.tambahan.length > 0" class="grid gap-2">
-              <div v-for="t in data.tambahan" :key="t.taskId" class="rounded-md border p-3 text-sm">
+              <div v-for="t in data.tambahan" :key="t.taskId" class="grid gap-1 rounded-md border p-3 text-sm">
+                <ProjectBadge :nama="t.projectNama" class="justify-self-start" />
                 <p class="font-medium">{{ t.deskripsi }}</p>
-                <p class="text-xs text-muted-foreground">{{ t.projectNama }}</p>
                 <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
               </div>
             </div>
@@ -210,11 +227,24 @@ const ringkasan = computed(() => {
               </div>
             </div>
 
-            <TaskPickerForm
-              require-catatan
-              submit-label="Tambahkan ke draft"
-              @add="addTambahan"
-            />
+            <Dialog v-model:open="tambahanDialogOpen">
+              <DialogTrigger as-child>
+                <Button type="button" size="sm" variant="outline" class="justify-self-start">
+                  <Plus class="mr-1 size-4" />
+                  Tambah kerjaan tambahan
+                </Button>
+              </DialogTrigger>
+              <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Tambah kerjaan tambahan</DialogTitle>
+                </DialogHeader>
+                <TaskPickerForm
+                  require-catatan
+                  :existing-catatan-by-task-id="tambahanCatatanByTaskId"
+                  @add="addTambahan"
+                />
+              </DialogContent>
+            </Dialog>
           </div>
         </CardContent>
       </Card>
@@ -226,9 +256,10 @@ const ringkasan = computed(() => {
         </CardHeader>
         <CardContent class="grid gap-3">
           <div v-if="data.rencanaHariIni.length > 0" class="grid gap-2">
-            <div v-for="r in data.rencanaHariIni" :key="r.taskId" class="rounded-md border p-3 text-sm">
+            <div v-for="r in data.rencanaHariIni" :key="r.taskId" class="grid gap-1 rounded-md border p-3 text-sm">
+              <ProjectBadge :nama="r.projectNama" class="justify-self-start" />
               <p class="font-medium">{{ r.deskripsi }}</p>
-              <p class="text-xs text-muted-foreground">{{ r.projectNama }}</p>
+              <MiniMarkdownText v-if="r.catatan" :text="r.catatan" class="text-xs text-muted-foreground" />
             </div>
           </div>
 
@@ -239,7 +270,23 @@ const ringkasan = computed(() => {
             </div>
           </div>
 
-          <TaskPickerForm submit-label="Tambahkan rencana" @add="addRencana" />
+          <Dialog v-model:open="rencanaDialogOpen">
+            <DialogTrigger as-child>
+              <Button type="button" size="sm" variant="outline" class="justify-self-start">
+                <Plus class="mr-1 size-4" />
+                Tambah rencana
+              </Button>
+            </DialogTrigger>
+            <DialogContent class="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Tambah rencana</DialogTitle>
+              </DialogHeader>
+              <TaskPickerForm
+                :existing-catatan-by-task-id="rencanaCatatanByTaskId"
+                @add="addRencana"
+              />
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
 

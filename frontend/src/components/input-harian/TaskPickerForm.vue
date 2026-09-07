@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { Plus } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import MiniMarkdownEditor from "@/components/input-harian/MiniMarkdownEditor.vue";
 import { useMyProjectsQuery } from "@/composables/useProjects";
 import { useTasksQuery } from "@/composables/useTasks";
 
+// Selalu dipakai di dalam Dialog (lihat InputHarianView.vue) — footer Batal/Simpan di bawah
+// memakai DialogClose/DialogFooter langsung, bukan komponen berdiri sendiri di luar dialog.
 const props = withDefaults(
   defineProps<{
     requireCatatan?: boolean;
-    submitLabel: string;
+    // Catatan yang sudah tersimpan hari ini per task (ADR-0043) — dipakai buat isi ulang textarea
+    // saat task yang sudah punya catatan dipilih lagi, supaya submit ulang melanjutkan (mis. centang
+    // checklist yang sudah ada), bukan menimpa jadi kosong (upsert catatan itu replace, bukan gabung).
+    existingCatatanByTaskId?: Record<number, string>;
   }>(),
-  { requireCatatan: false },
+  { requireCatatan: false, existingCatatanByTaskId: () => ({}) },
 );
 
 const emit = defineEmits<{
@@ -50,6 +55,12 @@ const error = ref("");
 
 watch(projectSelection, () => {
   taskId.value = "";
+});
+
+// Task yang sudah punya catatan hari ini (mis. todo-list yang mau dilanjut) diisi ulang, bukan
+// dimulai kosong — cegah submit ulang menimpa catatan lama jadi hilang (ADR-0043).
+watch(taskId, (v) => {
+  catatan.value = v ? (props.existingCatatanByTaskId[Number(v)] ?? "") : "";
 });
 
 // Project "Lainnya" belum punya task apa pun (baru mau dibuat) — paksa mode "Task baru",
@@ -109,39 +120,37 @@ function submit() {
 </script>
 
 <template>
-  <div class="grid gap-2 rounded-md border border-dashed p-3">
-    <div class="grid gap-2 sm:grid-cols-2">
-      <Select v-model="projectSelection">
-        <SelectTrigger class="w-full">
-          <SelectValue placeholder="Pilih project" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem v-for="p in activeProjects" :key="p.id" :value="String(p.id)">
-            {{ p.nama }}{{ p.belumDirekonsiliasi ? " (belum direkonsiliasi)" : "" }}
-          </SelectItem>
-          <SelectItem :value="LAINNYA">Lainnya…</SelectItem>
-        </SelectContent>
-      </Select>
+  <form class="grid gap-3" @submit.prevent="submit">
+    <Select v-model="projectSelection">
+      <SelectTrigger class="w-full">
+        <SelectValue placeholder="Pilih project" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem v-for="p in activeProjects" :key="p.id" :value="String(p.id)">
+          {{ p.nama }}{{ p.belumDirekonsiliasi ? " (belum direkonsiliasi)" : "" }}
+        </SelectItem>
+        <SelectItem :value="LAINNYA">Lainnya…</SelectItem>
+      </SelectContent>
+    </Select>
 
-      <Input v-if="isLainnya" v-model="namaProjectBaru" placeholder="Nama project baru" />
-      <div v-else class="flex rounded-lg bg-muted p-1 text-sm">
-        <button
-          type="button"
-          class="flex-1 rounded-md px-3 py-1 font-medium transition-colors"
-          :class="mode === 'existing' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'"
-          @click="mode = 'existing'"
-        >
-          Task terbuka
-        </button>
-        <button
-          type="button"
-          class="flex-1 rounded-md px-3 py-1 font-medium transition-colors"
-          :class="mode === 'new' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'"
-          @click="mode = 'new'"
-        >
-          Task baru
-        </button>
-      </div>
+    <Input v-if="isLainnya" v-model="namaProjectBaru" placeholder="Nama project baru" />
+    <div v-else class="flex rounded-lg bg-muted p-1 text-sm">
+      <button
+        type="button"
+        class="flex-1 rounded-md px-3 py-1 font-medium transition-colors"
+        :class="mode === 'existing' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'"
+        @click="mode = 'existing'"
+      >
+        Task terbuka
+      </button>
+      <button
+        type="button"
+        class="flex-1 rounded-md px-3 py-1 font-medium transition-colors"
+        :class="mode === 'new' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'"
+        @click="mode = 'new'"
+      >
+        Task baru
+      </button>
     </div>
 
     <p v-if="isLainnya" class="text-xs text-muted-foreground">
@@ -173,9 +182,11 @@ function submit() {
 
     <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 
-    <Button type="button" size="sm" class="justify-self-start" @click="submit">
-      <Plus class="mr-1 size-4" />
-      {{ submitLabel }}
-    </Button>
-  </div>
+    <DialogFooter>
+      <DialogClose as-child>
+        <Button type="button" variant="outline">Batal</Button>
+      </DialogClose>
+      <Button type="submit">Simpan</Button>
+    </DialogFooter>
+  </form>
 </template>

@@ -12,7 +12,11 @@ const router = createRouter({
       component: () => import("@/views/LoginView.vue"),
       meta: { public: true },
     },
-    { path: "/", redirect: "/input" },
+    {
+      path: "/",
+      name: "beranda",
+      component: () => import("@/views/BerandaView.vue"),
+    },
     {
       path: "/input",
       name: "input",

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { ClipboardList, FolderKanban, History, ShieldCheck, X } from "@lucide/vue";
+import { ClipboardList, FolderKanban, History, Home, ShieldCheck, X } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/composables/useAuth";
 import { useMyProjectsQuery } from "@/composables/useProjects";
@@ -45,6 +45,14 @@ const { isMobile, setOpenMobile } = useSidebar();
       </SidebarMenu>
 
       <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton as-child :is-active="route.name === 'beranda'" class="h-11 md:h-8" @click="setOpenMobile(false)">
+            <RouterLink to="/">
+              <Home />
+              <span>Beranda</span>
+            </RouterLink>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton as-child :is-active="route.name === 'input'" class="h-11 md:h-8" @click="setOpenMobile(false)">
             <RouterLink to="/input">

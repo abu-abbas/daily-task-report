@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from "vue";
 import { useVModel } from "@vueuse/core";
-import { Bold, Eye, EyeOff, Italic, List } from "@lucide/vue";
+import { Bold, Eye, EyeOff, Italic, List, ListTodo } from "@lucide/vue";
 import { Textarea } from "@/components/ui/textarea";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
 
@@ -37,16 +37,16 @@ function wrapSelection(before: string, after = before) {
   });
 }
 
-function toggleBullet() {
+function toggleLinePrefix(addPrefix: string, stripPattern: RegExp) {
   withSelection((el, start, end) => {
     const text = value.value;
     const lineStart = text.lastIndexOf("\n", start - 1) + 1;
     const lineEnd = text.indexOf("\n", end) === -1 ? text.length : text.indexOf("\n", end);
     const lines = text.slice(lineStart, lineEnd).split("\n");
-    const allBulleted = lines.every((l) => l.trim() === "" || l.startsWith("- "));
+    const allPrefixed = lines.every((l) => l.trim() === "" || stripPattern.test(l));
     const nextLines = lines.map((l) => {
       if (l.trim() === "") return l;
-      return allBulleted ? l.replace(/^- /, "") : `- ${l}`;
+      return allPrefixed ? l.replace(stripPattern, "") : `${addPrefix}${l.replace(/^- /, "")}`;
     });
     const nextBlock = nextLines.join("\n");
     value.value = text.slice(0, lineStart) + nextBlock + text.slice(lineEnd);
@@ -55,6 +55,15 @@ function toggleBullet() {
       el.setSelectionRange(lineStart, lineStart + nextBlock.length);
     });
   });
+}
+
+function toggleBullet() {
+  toggleLinePrefix("- ", /^- /);
+}
+
+// Checkbox todo-list opsional (ADR-0043) — sintaks sama dengan bullet, cuma ditambah "[ ] ".
+function toggleTodo() {
+  toggleLinePrefix("- [ ] ", /^- \[[ xX]\] /);
 }
 </script>
 
@@ -72,6 +81,9 @@ function toggleBullet() {
         </button>
         <button type="button" class="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50" title="Bullet" :disabled="showPreview" @click="toggleBullet">
           <List class="size-3.5" />
+        </button>
+        <button type="button" class="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50" title="Checklist" :disabled="showPreview" @click="toggleTodo">
+          <ListTodo class="size-3.5" />
         </button>
       </div>
       <button

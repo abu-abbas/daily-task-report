@@ -63,8 +63,8 @@ export function handleGetTodayInput(req: Request, tanggalOverride?: string): Res
     .all(ctx.user.id, hariKerjaSebelumnya);
 
   const rencanaHariIni = db
-    .query<ChecklistRow, [number, string]>(
-      `SELECT tl.task_id AS taskId, t.deskripsi, t.tag, t.project_id AS projectId, p.nama AS projectNama
+    .query<ChecklistRow & { catatan: string | null }, [number, string]>(
+      `SELECT tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.project_id AS projectId, p.nama AS projectNama
        FROM task_logs tl
        JOIN tasks t ON t.id = tl.task_id
        JOIN projects p ON p.id = t.project_id

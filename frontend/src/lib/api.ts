@@ -177,6 +177,7 @@ export interface TambahanItem {
 
 export interface RencanaHariIniItem {
   taskId: number;
+  catatan: string | null;
   deskripsi: string;
   tag: string | null;
   projectId: number;

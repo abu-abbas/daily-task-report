@@ -68,6 +68,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0040 | [Import project dari GitLab CE sebagai alternatif input manual](adr/0040-import-project-gitlab.md) |
 | 0041 | [Identitas item task_logs — satu baris per upsert](adr/0041-identitas-item-task-log.md) |
 | 0042 | [Usulan project via "Lainnya" dengan rekonsiliasi admin](adr/0042-project-lainnya-usulan.md) |
+| 0043 | [Beranda sebagai preview rencana hari ini, todo-list opsional dalam catatan](adr/0043-beranda-dan-todo-list-rencana.md) |
 
 ## Tahapan pekerjaan
 
