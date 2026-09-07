@@ -85,10 +85,11 @@ const closeTaskSchema = z.object({
   deskripsiPenutupan: z.string().optional(),
 });
 
-// ADR-0012/Q-04: siapa pun anggota aktif project-nya boleh menutup (task tanpa pemilik tetap,
-// konsisten ADR-0010/ADR-0005). Tidak ada reopen (YAGNI, belum dibutuhkan). Rencana yang belum
-// direalisasi di task ini dihapus otomatis saat ditutup — pola sama dengan izin menghapus
-// rencana lama (ADR-0044) — supaya task closed tidak nyantol jadi item checklist besok.
+// ADR-0012/Q-04 (revisi): siapa pun anggota aktif project-nya boleh menutup (task tanpa pemilik
+// tetap, konsisten ADR-0010/ADR-0005). Tidak ada reopen (YAGNI, belum dibutuhkan). Rencana yang
+// belum direalisasi di task ini DIKONVERSI jadi realisasi (bukan dihapus, koreksi dari revisi
+// awal) — menutup task berarti pekerjaan yang direncanakan dianggap selesai/terealisasi, bukan
+// batal begitu saja; deskripsi penutupan dipakai sebagai catatan hasilnya.
 export async function handleCloseTask(req: Request, taskId: number): Promise<Response> {
   const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
   const ctx = getAuthContext(token);
@@ -106,20 +107,32 @@ export async function handleCloseTask(req: Request, taskId: number): Promise<Res
   if (task.status === "closed") return errorResponse(409, "Task sudah ditutup.");
 
   const deskripsiPenutupan = parsed.data.deskripsiPenutupan?.trim() || null;
+  // ADR-0009: catatan hasil realisasi wajib diisi — deskripsi penutupan jadi catatannya kalau
+  // ada, kalau tidak diisi tetap butuh catatan generik (bukan kosong).
+  const catatanRealisasi = deskripsiPenutupan ?? "Task ditutup.";
 
   db.transaction(() => {
     db.query("UPDATE tasks SET status = 'closed', deskripsi_penutupan = ? WHERE id = ?").run(
       deskripsiPenutupan,
       taskId,
     );
-    db.query(
-      `DELETE FROM task_logs
-       WHERE task_id = ? AND jenis = 'rencana'
-       AND NOT EXISTS (
-         SELECT 1 FROM task_logs r
-         WHERE r.task_id = task_logs.task_id AND r.jenis = 'realisasi' AND r.tanggal = task_logs.tanggal
-       )`,
-    ).run(taskId);
+
+    const belumRealisasi = db
+      .query<{ userId: number; tanggal: string }, [number]>(
+        `SELECT tl.user_id AS userId, tl.tanggal FROM task_logs tl
+         WHERE tl.task_id = ? AND tl.jenis = 'rencana'
+         AND NOT EXISTS (
+           SELECT 1 FROM task_logs r
+           WHERE r.task_id = tl.task_id AND r.user_id = tl.user_id AND r.jenis = 'realisasi' AND r.tanggal = tl.tanggal
+         )`,
+      )
+      .all(taskId);
+
+    for (const row of belumRealisasi) {
+      db.query(
+        "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan, is_extra) VALUES (?, ?, ?, 'realisasi', ?, 0)",
+      ).run(taskId, row.userId, row.tanggal, catatanRealisasi);
+    }
   })();
 
   return json({ task: publicTask(getTask(taskId)!) });

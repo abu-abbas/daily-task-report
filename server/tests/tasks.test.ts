@@ -121,8 +121,8 @@ describe("POST /api/tasks", () => {
   });
 });
 
-// ADR-0012/Q-04: siapa pun anggota aktif boleh menutup, rencana belum direalisasi dihapus
-// otomatis, tidak ada reopen.
+// ADR-0012/Q-04 (revisi): siapa pun anggota aktif boleh menutup, rencana belum direalisasi
+// dikonversi jadi realisasi (bukan dihapus), tidak ada reopen.
 describe("POST /api/tasks/:id/tutup", () => {
   let taskId: number;
 
@@ -132,12 +132,12 @@ describe("POST /api/tasks/:id/tutup", () => {
     );
     taskId = ((await res.json()) as { task: { id: number } }).task.id;
 
-    // Rencana belum direalisasi — harus terhapus saat task ditutup.
+    // Rencana belum direalisasi — harus dikonversi jadi realisasi saat task ditutup.
     db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-10', 'rencana')").run(
       taskId,
       tenagaId,
     );
-    // Rencana yang sudah punya realisasi — harus tetap ada (histori valid).
+    // Rencana yang sudah punya realisasi — catatan lamanya tidak boleh tertimpa.
     db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-09', 'rencana')").run(
       taskId,
       tenagaId,
@@ -162,7 +162,7 @@ describe("POST /api/tasks/:id/tutup", () => {
     expect(res.status).toBe(404);
   });
 
-  test("berhasil menutup dengan deskripsi; rencana belum direalisasi hilang, yang sudah direalisasi tetap ada", async () => {
+  test("berhasil menutup dengan deskripsi; rencana belum direalisasi jadi realisasi otomatis, yang sudah direalisasi tidak tertimpa", async () => {
     const res = await handleCloseTask(
       req("POST", `/api/tasks/${taskId}/tutup`, tenagaToken, { deskripsiPenutupan: "Sudah kelar semua" }),
       taskId,
@@ -172,15 +172,22 @@ describe("POST /api/tasks/:id/tutup", () => {
     expect(body.task.status).toBe("closed");
     expect(body.task.deskripsiPenutupan).toBe("Sudah kelar semua");
 
-    const belumRealisasi = db
-      .query("SELECT id FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-10'")
+    // Rencana 2026-09-10 belum punya realisasi sebelumnya — sekarang harus ada, catatannya
+    // dari deskripsi penutupan, dan rencananya sendiri tidak dihapus (histori tetap utuh).
+    const rencanaLama = db
+      .query("SELECT id FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-10' AND jenis = 'rencana'")
       .get(taskId);
-    expect(belumRealisasi).toBeNull();
+    expect(rencanaLama).not.toBeNull();
+    const realisasiBaru = db
+      .query("SELECT catatan FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-10' AND jenis = 'realisasi'")
+      .get(taskId) as { catatan: string } | null;
+    expect(realisasiBaru?.catatan).toBe("Sudah kelar semua");
 
-    const sudahRealisasi = db
-      .query("SELECT id FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-09' AND jenis = 'rencana'")
-      .get(taskId);
-    expect(sudahRealisasi).not.toBeNull();
+    // Rencana 2026-09-09 sudah punya realisasi "Beres" — catatan itu tidak boleh tertimpa.
+    const realisasiLama = db
+      .query("SELECT catatan FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-09' AND jenis = 'realisasi'")
+      .get(taskId) as { catatan: string };
+    expect(realisasiLama.catatan).toBe("Beres");
   });
 
   test("menutup ulang task yang sudah closed ditolak (409)", async () => {
@@ -193,5 +200,24 @@ describe("POST /api/tasks/:id/tutup", () => {
     return res.json().then((body: { tasks: { deskripsi: string }[] }) => {
       expect(body.tasks.some((t) => t.deskripsi === "Task Ditutup")).toBe(false);
     });
+  });
+
+  test("tanpa deskripsi penutupan, catatan realisasi otomatis pakai fallback generik", async () => {
+    const createRes = await handleCreateTask(
+      req("POST", "/api/tasks", tenagaToken, { projectId, deskripsi: "Task Ditutup Tanpa Deskripsi" }),
+    );
+    const taskId2 = ((await createRes.json()) as { task: { id: number } }).task.id;
+    db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-11', 'rencana')").run(
+      taskId2,
+      tenagaId,
+    );
+
+    const res = await handleCloseTask(req("POST", `/api/tasks/${taskId2}/tutup`, tenagaToken, {}), taskId2);
+    expect(res.status).toBe(200);
+
+    const realisasi = db
+      .query("SELECT catatan FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-11' AND jenis = 'realisasi'")
+      .get(taskId2) as { catatan: string };
+    expect(realisasi.catatan).toBe("Task ditutup.");
   });
 });
