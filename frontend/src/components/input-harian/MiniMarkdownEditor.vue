@@ -18,7 +18,9 @@ const emit = defineEmits<{
 
 const value = useVModel(props, "modelValue", emit, { passive: true });
 const textareaRef = useTemplateRef<{ $el: HTMLTextAreaElement }>("textareaRef");
-const showPreview = ref(false);
+// Sudah ada isinya dari awal (mis. buka lagi laporan tersimpan)? Default preview — lebih enak
+// dibaca daripada mentahan markdown. Kosong (lagi nulis baru) tetap default edit.
+const showPreview = ref(props.modelValue.trim().length > 0);
 
 function withSelection(fn: (el: HTMLTextAreaElement, start: number, end: number) => void) {
   const el = textareaRef.value?.$el;
