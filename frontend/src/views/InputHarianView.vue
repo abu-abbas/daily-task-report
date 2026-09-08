@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import { parseDate } from "@internationalized/date";
-import { CalendarIcon, CircleCheck, Plus } from "@lucide/vue";
+import { CalendarIcon, CircleCheck, Clock, Plus, Send } from "@lucide/vue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -337,10 +337,19 @@ const totalAttachmentAkanHilang = computed(() =>
         </Popover>
       </div>
 
+      <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
       <Card>
-        <CardHeader>
-          <CardTitle class="text-base">Realisasi</CardTitle>
-          <CardDescription>{{ formatTanggalPanjang(data.hariKerjaSebelumnya) }}</CardDescription>
+        <CardHeader class="flex-row items-center gap-3 space-y-0">
+          <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <CircleCheck class="size-5" aria-hidden="true" />
+          </div>
+          <div class="grid gap-0.5">
+            <CardTitle class="text-base">Realisasi</CardTitle>
+            <CardDescription>{{ formatTanggalPanjang(data.hariKerjaSebelumnya) }}</CardDescription>
+          </div>
+          <Badge variant="secondary" class="ml-auto shrink-0">
+            {{ data.checklist.length + data.tambahan.length }} pekerjaan
+          </Badge>
         </CardHeader>
         <CardContent class="grid gap-4">
           <div v-if="checklistEmpty" class="grid gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
@@ -462,9 +471,17 @@ const totalAttachmentAkanHilang = computed(() =>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle class="text-base">{{ izinAktif ? "Izin" : "Rencana" }}</CardTitle>
-          <CardDescription>{{ formatTanggalPanjang(data.tanggal) }}</CardDescription>
+        <CardHeader class="flex-row items-center gap-3 space-y-0">
+          <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-500">
+            <Clock class="size-5" aria-hidden="true" />
+          </div>
+          <div class="grid gap-0.5">
+            <CardTitle class="text-base">{{ izinAktif ? "Izin" : "Rencana" }}</CardTitle>
+            <CardDescription>{{ formatTanggalPanjang(data.tanggal) }}</CardDescription>
+          </div>
+          <Badge v-if="!izinAktif" variant="secondary" class="ml-auto shrink-0">
+            {{ data.rencanaHariIni.length }} rencana
+          </Badge>
         </CardHeader>
         <CardContent class="grid gap-3">
           <label class="flex items-start gap-2 text-sm">
@@ -540,9 +557,13 @@ const totalAttachmentAkanHilang = computed(() =>
           </template>
         </CardContent>
       </Card>
+      </div>
 
       <div class="flex justify-end">
-        <Button size="lg" :disabled="!canSave" @click="confirmOpen = true">Simpan</Button>
+        <Button size="lg" :disabled="!canSave" @click="confirmOpen = true">
+          Simpan
+          <Send class="size-4" />
+        </Button>
       </div>
 
       <AlertDialog v-model:open="confirmOpen">

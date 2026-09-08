@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Check, ChevronRight, Trash2 } from "@lucide/vue";
+import { ChevronRight, Trash2 } from "@lucide/vue";
 import { LOCALE } from "@/lib/locale";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -61,12 +61,7 @@ const kelompok = computed(() => [
             <SidebarMenu>
               <SidebarMenuItem v-for="h in grup.items" :key="h.id">
                 <SidebarMenuButton>
-                  <div
-                    :data-active="index === 0"
-                    class="group/holiday-item flex aspect-square size-4 shrink-0 items-center justify-center rounded-lg border border-input data-[active=true]:border-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
-                  >
-                    <Check class="hidden size-3.5 group-data-[active=true]/holiday-item:block" />
-                  </div>
+                  <span class="size-1.5 shrink-0 rounded-full bg-sidebar-foreground/50" />
                   <span class="truncate">{{ h.nama }}</span>
                   <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ formatRentang(h) }}</span>
                 </SidebarMenuButton>
