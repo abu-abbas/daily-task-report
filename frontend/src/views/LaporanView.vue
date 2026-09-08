@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { ChevronLeft, ChevronRight, FileDown, Paperclip } from "@lucide/vue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
@@ -79,58 +80,60 @@ function tanggalKosongLabel(tanggal: string): string {
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <Popover :open="laporanPopoverOpen" @update:open="tutupLaporanPopover">
-        <PopoverTrigger as-child>
-          <Button variant="outline">
-            {{ bulanTerpilihLabel }}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" class="w-56 p-1">
-          <div v-if="!tampilkanPemilihBulan" class="grid gap-0.5">
-            <button
-              v-for="opt in bulanTerbaruOptions"
-              :key="opt.bulan"
-              type="button"
-              class="rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-              @click="pilihBulan(opt.bulan)"
-            >
-              {{ opt.label }}
-            </button>
-            <div class="my-1 border-t" />
-            <button
-              type="button"
-              class="rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-              @click="tampilkanPemilihBulan = true"
-            >
-              Bulan lainnya…
-            </button>
-          </div>
-          <div v-else class="grid gap-1 p-1">
-            <div class="flex items-center justify-between pb-1">
-              <Button variant="ghost" size="icon" aria-label="Tahun sebelumnya" @click="bulanLainnyaTahun--">
-                <ChevronLeft class="size-4" />
-              </Button>
-              <span class="text-sm font-medium">{{ bulanLainnyaTahun }}</span>
-              <Button variant="ghost" size="icon" aria-label="Tahun berikutnya" @click="bulanLainnyaTahun++">
-                <ChevronRight class="size-4" />
-              </Button>
-            </div>
-            <div class="grid grid-cols-3 gap-1">
+      <ButtonGroup>
+        <Popover :open="laporanPopoverOpen" @update:open="tutupLaporanPopover">
+          <PopoverTrigger as-child>
+            <Button variant="secondary">
+              {{ bulanTerpilihLabel }}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" class="w-56 p-1">
+            <div v-if="!tampilkanPemilihBulan" class="grid gap-0.5">
               <button
-                v-for="(nama, i) in namaBulanPendek"
-                :key="i"
+                v-for="opt in bulanTerbaruOptions"
+                :key="opt.bulan"
                 type="button"
-                class="rounded-md border px-2 py-1.5 text-center text-sm hover:bg-accent"
-                @click="pilihBulanLainnya(i)"
+                class="rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                @click="pilihBulan(opt.bulan)"
               >
-                {{ nama }}
+                {{ opt.label }}
+              </button>
+              <div class="my-1 border-t" />
+              <button
+                type="button"
+                class="rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                @click="tampilkanPemilihBulan = true"
+              >
+                Bulan lainnya…
               </button>
             </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+            <div v-else class="grid gap-1 p-1">
+              <div class="flex items-center justify-between pb-1">
+                <Button variant="ghost" size="icon" aria-label="Tahun sebelumnya" @click="bulanLainnyaTahun--">
+                  <ChevronLeft class="size-4" />
+                </Button>
+                <span class="text-sm font-medium">{{ bulanLainnyaTahun }}</span>
+                <Button variant="ghost" size="icon" aria-label="Tahun berikutnya" @click="bulanLainnyaTahun++">
+                  <ChevronRight class="size-4" />
+                </Button>
+              </div>
+              <div class="grid grid-cols-3 gap-1">
+                <button
+                  v-for="(nama, i) in namaBulanPendek"
+                  :key="i"
+                  type="button"
+                  class="rounded-md border px-2 py-1.5 text-center text-sm hover:bg-accent"
+                  @click="pilihBulanLainnya(i)"
+                >
+                  {{ nama }}
+                </button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
 
-      <Button variant="secondary" @click="sudahTampil = true">Tampilkan</Button>
+        <Button variant="secondary" @click="sudahTampil = true">Tampilkan</Button>
+      </ButtonGroup>
 
       <Button as-child class="ml-auto">
         <a :href="monthlyReportPdfUrl(bulanTerpilih)" target="_blank">
