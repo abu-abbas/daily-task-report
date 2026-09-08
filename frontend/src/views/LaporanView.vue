@@ -7,6 +7,7 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
 import { LOCALE } from "@/lib/locale";
 import { monthlyReportPdfUrl } from "@/lib/api";
@@ -136,7 +137,20 @@ function tanggalKosongLabel(tanggal: string): string {
         <Button variant="secondary" @click="sudahTampil = true">Tampilkan</Button>
       </ButtonGroup>
 
-      <Button as-child class="ml-auto">
+      <Tooltip v-if="!preview">
+        <TooltipTrigger as-child>
+          <!-- disabled:pointer-events-none di Button bikin hover tidak pernah kena tombolnya
+               sendiri — dibungkus span (tidak disabled) biar Tooltip tetap bisa muncul. -->
+          <span tabindex="0" class="ml-auto inline-block">
+            <Button disabled class="pointer-events-none w-full">
+              <FileDown class="size-4" />
+              Unduh laporan (PDF)
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Klik "Tampilkan" dulu buat cek datanya sebelum diunduh</TooltipContent>
+      </Tooltip>
+      <Button v-else as-child class="ml-auto">
         <a :href="monthlyReportPdfUrl(bulanTerpilih)" target="_blank">
           <FileDown class="size-4" />
           Unduh laporan (PDF)
