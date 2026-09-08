@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { useTemplateRef } from "vue";
 import { toast } from "vue-sonner";
-import { Paperclip, Trash2 } from "@lucide/vue";
+import { Paperclip, X } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+} from "@/components/ui/attachment";
 import { ApiError, attachmentFileUrl, type AttachmentItem } from "@/lib/api";
+import { formatUkuranFile, labelTipeFile } from "@/lib/attachment";
 import { useDeleteAttachment, useUploadAttachment } from "@/composables/useTaskLogs";
 
 const props = defineProps<{
@@ -59,34 +70,27 @@ async function remove(id: number) {
 
 <template>
   <div class="grid gap-1.5">
-    <div v-if="items.length > 0" class="flex flex-wrap gap-2">
-      <div v-for="a in items" :key="a.id" class="group relative">
-        <a :href="attachmentFileUrl(a.id)" target="_blank" rel="noopener">
-          <img
-            :src="attachmentFileUrl(a.id)"
-            :alt="a.namaAsli"
-            :title="a.namaAsli"
-            class="size-16 rounded-md border object-cover"
-          />
-        </a>
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <Button
-              type="button"
-              variant="destructive"
-              size="icon-xs"
-              aria-label="Hapus lampiran"
-              class="absolute -right-1.5 -top-1.5 opacity-0 transition-opacity group-hover:opacity-100"
-              :disabled="deleteMutation.isPending.value"
-              @click="remove(a.id)"
-            >
-              <Trash2 class="size-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Hapus</TooltipContent>
-        </Tooltip>
-      </div>
-    </div>
+    <AttachmentGroup v-if="items.length > 0">
+      <Attachment v-for="a in items" :key="a.id" orientation="vertical">
+        <AttachmentTrigger as="a" :href="attachmentFileUrl(a.id)" target="_blank" rel="noopener" :aria-label="`Buka ${a.namaAsli}`" />
+        <AttachmentMedia variant="image">
+          <img :src="attachmentFileUrl(a.id)" :alt="a.namaAsli" />
+        </AttachmentMedia>
+        <AttachmentContent>
+          <AttachmentTitle>{{ a.namaAsli }}</AttachmentTitle>
+          <AttachmentDescription>{{ labelTipeFile(a.fileType) }} · {{ formatUkuranFile(a.ukuranBytes) }}</AttachmentDescription>
+        </AttachmentContent>
+        <AttachmentActions>
+          <AttachmentAction
+            aria-label="Hapus lampiran"
+            :disabled="deleteMutation.isPending.value"
+            @click="remove(a.id)"
+          >
+            <X class="size-3.5" />
+          </AttachmentAction>
+        </AttachmentActions>
+      </Attachment>
+    </AttachmentGroup>
 
     <input
       ref="fileInput"

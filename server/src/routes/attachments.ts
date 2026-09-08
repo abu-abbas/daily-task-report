@@ -17,17 +17,24 @@ interface AttachmentRow {
   file_path: string;
   file_type: string | null;
   nama_asli: string;
+  ukuran_bytes: number;
   uploaded_at: string;
 }
 
 function publicAttachment(row: AttachmentRow) {
-  return { id: row.id, namaAsli: row.nama_asli, fileType: row.file_type, uploadedAt: row.uploaded_at };
+  return {
+    id: row.id,
+    namaAsli: row.nama_asli,
+    fileType: row.file_type,
+    ukuranBytes: row.ukuran_bytes,
+    uploadedAt: row.uploaded_at,
+  };
 }
 
 function getAttachment(id: number): AttachmentRow | null {
   return db
     .query<AttachmentRow, [number]>(
-      "SELECT id, file_path, file_type, nama_asli, uploaded_at FROM attachments WHERE id = ?",
+      "SELECT id, file_path, file_type, nama_asli, ukuran_bytes, uploaded_at FROM attachments WHERE id = ?",
     )
     .get(id);
 }
@@ -101,10 +108,10 @@ export async function handleUploadAttachment(req: Request): Promise<Response> {
 
   const result = db
     .query(
-      `INSERT INTO attachments (attachable_type, attachable_id, file_path, file_type, nama_asli, uploaded_by)
-       VALUES ('task_log', ?, ?, ?, ?, ?)`,
+      `INSERT INTO attachments (attachable_type, attachable_id, file_path, file_type, nama_asli, ukuran_bytes, uploaded_by)
+       VALUES ('task_log', ?, ?, ?, ?, ?, ?)`,
     )
-    .run(taskLogId, filePath, extToMime(ext), file.name, ctx.user.id);
+    .run(taskLogId, filePath, extToMime(ext), file.name, bytes.length, ctx.user.id);
 
   const row = getAttachment(Number(result.lastInsertRowid))!;
   return json({ attachment: publicAttachment(row) }, { status: 201 });

@@ -177,6 +177,7 @@ export interface AttachmentItem {
   id: number;
   namaAsli: string;
   fileType: string | null;
+  ukuranBytes: number;
   uploadedAt: string;
 }
 

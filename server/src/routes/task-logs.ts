@@ -45,6 +45,7 @@ interface AttachmentPublic {
   id: number;
   namaAsli: string;
   fileType: string | null;
+  ukuranBytes: number;
   uploadedAt: string;
 }
 
@@ -55,11 +56,8 @@ function attachmentsByTaskLogId(taskLogIds: number[]): Map<number, AttachmentPub
   if (taskLogIds.length === 0) return map;
   const placeholders = taskLogIds.map(() => "?").join(",");
   const rows = db
-    .query<
-      { id: number; taskLogId: number; namaAsli: string; fileType: string | null; uploadedAt: string },
-      number[]
-    >(
-      `SELECT id, attachable_id AS taskLogId, nama_asli AS namaAsli, file_type AS fileType, uploaded_at AS uploadedAt
+    .query<AttachmentPublic & { taskLogId: number }, number[]>(
+      `SELECT id, attachable_id AS taskLogId, nama_asli AS namaAsli, file_type AS fileType, ukuran_bytes AS ukuranBytes, uploaded_at AS uploadedAt
        FROM attachments WHERE attachable_type = 'task_log' AND attachable_id IN (${placeholders})`,
     )
     .all(...taskLogIds);
