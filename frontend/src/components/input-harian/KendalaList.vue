@@ -63,16 +63,19 @@ function batalTambah() {
     <div
       v-if="items.length > 0"
       class="grid gap-1.5 rounded-md border border-dashed p-2 text-xs"
-      :class="adaKendalaBelumSelesai && 'bg-destructive/10'"
+      :class="adaKendalaBelumSelesai && 'bg-destructive/5'"
     >
-      <Badge variant="outline" class="w-fit shrink-0">Kendala ({{ items.length }})</Badge>
+      <Badge variant="outline" class="w-fit shrink-0">
+        <div class="bg-destructive size-1.5 rounded-full"></div>
+        Kendala ({{ items.length }})
+      </Badge>
       <div
         v-for="k in items"
         :key="k.id"
-        class="flex items-start justify-between gap-2 border-t pt-1.5 first:border-t-0 first:pt-0"
+        class="flex items-center justify-between gap-2 border-t pt-1.5 first:border-t-0 first:pt-0"
       >
-        <span class="flex items-start gap-1.5">
-          <Badge v-if="k.status === 'resolved'" variant="secondary" class="shrink-0">Selesai</Badge>
+        <span class="flex items-center gap-1.5">
+          <CircleCheck v-if="k.status === 'resolved'" class="size-3 stroke-green-500" />
           <span>{{ k.deskripsi }}</span>
         </span>
         <div class="flex shrink-0 items-center gap-1">

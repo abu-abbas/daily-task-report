@@ -445,7 +445,7 @@ const rencanaTersimpanAkanDihapus = computed(() =>
           <label class="flex items-start gap-2 text-sm">
             <Checkbox :model-value="izinAktif" @update:model-value="(v) => (izinAktif = v === true)" />
             <span class="grid gap-0.5">
-              <span class="font-medium">Izin / tidak masuk tanggal laporan</span>
+              <span class="font-medium">Izin/ tidak masuk</span>
               <span class="text-xs text-muted-foreground">Realisasi hari kerja sebelumnya tetap bisa diisi.</span>
             </span>
           </label>
