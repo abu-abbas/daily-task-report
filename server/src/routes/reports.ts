@@ -1,7 +1,7 @@
 import { db } from "../db";
-import { errorResponse } from "../http";
+import { errorResponse, json } from "../http";
 import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
-import { isWorkday } from "../kalender";
+import { isWorkday, todayJakarta } from "../kalender";
 import { absoluteAttachmentPath } from "../storage";
 import { buildMonthlyReportPdf, catatanToLines, type ReportAktivitasRow, type ReportHari, type ReportLampiran, type ReportTask } from "../report-pdf";
 
@@ -46,17 +46,20 @@ interface AttachmentRow {
   fileType: string | null;
 }
 
-// Cicilan awal Stage 7 (ADR-0019) — laporan PDF generik satu layout, tanpa template Word (itu
-// masih menunggu Q-06). Cakupan diri-sendiri saja, sama seperti Riwayat.
-export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+interface AggregatedReport {
+  bulanLabel: string;
+  tasks: ReportTask[];
+  taskNoMap: Map<number, number>;
+  taskDatesWorked: Map<number, Set<string>>;
+  hari: ReportHari[];
+  rows: RealisasiRow[];
+  attachmentsByLog: Map<number, AttachmentRow[]>;
+}
 
-  const url = new URL(req.url);
-  const bulan = url.searchParams.get("bulan");
-  if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
-
+// Agregasi bersama PDF (handleMonthlyReportPdf) dan pratinjau layar (handleMonthlyReportPreview)
+// — query task_logs realisasi, nomor task tetap, kalender hari (isWorkday/izin), dan attachment
+// per log (metadata saja, BUKAN bytes — itu cuma dibaca saat benar-benar bikin PDF).
+async function aggregateMonthlyReport(userId: number, bulan: string): Promise<AggregatedReport> {
   const rows = db
     .query<RealisasiRow, [number, string]>(
       `SELECT tl.id AS taskLogId, tl.task_id AS taskId, t.deskripsi, t.tag, t.status AS taskStatus,
@@ -67,7 +70,7 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
        WHERE tl.user_id = ? AND tl.jenis = 'realisasi' AND tl.tanggal LIKE ? || '%'
        ORDER BY tl.tanggal ASC, t.id ASC`,
     )
-    .all(ctx.user.id, bulan);
+    .all(userId, bulan);
 
   // Nomor task tetap (dipakai ulang di timesheet dan tabel aktifitas) — urutan kemunculan
   // pertama pada bulan itu, bukan penomoran ulang per baris aktifitas.
@@ -102,12 +105,47 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
     }
   }
 
+  const izinRows = db
+    .query<{ tanggal: string }, [number, string]>(
+      "SELECT tanggal FROM leaves WHERE user_id = ? AND tanggal LIKE ? || '%'",
+    )
+    .all(userId, bulan);
+  const izinSet = new Set(izinRows.map((r) => r.tanggal));
+
+  const hari: ReportHari[] = [];
+  const total = daysInMonth(bulan);
+  for (let d = 1; d <= total; d++) {
+    const tanggal = `${bulan}-${String(d).padStart(2, "0")}`;
+    hari.push({ tanggal, isWorkday: isWorkday(tanggal), isIzin: izinSet.has(tanggal) });
+  }
+
+  const [tahun, bulanAngka] = bulan.split("-").map(Number);
+  const bulanLabel = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric", timeZone: "UTC" }).format(
+    new Date(Date.UTC(tahun!, bulanAngka! - 1, 1)),
+  );
+
+  return { bulanLabel, tasks, taskNoMap, taskDatesWorked, hari, rows, attachmentsByLog };
+}
+
+// Cicilan awal Stage 7 (ADR-0019) — laporan PDF generik satu layout, tanpa template Word (itu
+// masih menunggu Q-06). Cakupan diri-sendiri saja, sama seperti Riwayat.
+export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
+  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
+  const ctx = getAuthContext(token);
+  if (!ctx) return errorResponse(401, "Belum login.");
+
+  const url = new URL(req.url);
+  const bulan = url.searchParams.get("bulan");
+  if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
+
+  const agg = await aggregateMonthlyReport(ctx.user.id, bulan);
+
   // Penomoran lampiran global lintas dokumen, urut sesuai urutan baris aktifitas ditemukan.
   const lampiran: ReportLampiran[] = [];
   const aktivitas: ReportAktivitasRow[] = [];
-  for (const r of rows) {
+  for (const r of agg.rows) {
     const lampiranNumbers: number[] = [];
-    for (const a of attachmentsByLog.get(r.taskLogId) ?? []) {
+    for (const a of agg.attachmentsByLog.get(r.taskLogId) ?? []) {
       const ext = a.fileType === "image/png" ? "png" : "jpg";
       const bytes = await Bun.file(absoluteAttachmentPath(a.filePath))
         .arrayBuffer()
@@ -124,7 +162,7 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
     }
 
     aktivitas.push({
-      no: taskNoMap.get(r.taskId)!,
+      no: agg.taskNoMap.get(r.taskId)!,
       tanggalLabel: tanggalLabel(r.tanggal),
       projectNama: r.projectNama,
       kegiatan: taskLabel(r.deskripsi, r.tag),
@@ -134,31 +172,12 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
     });
   }
 
-  const izinRows = db
-    .query<{ tanggal: string }, [number, string]>(
-      "SELECT tanggal FROM leaves WHERE user_id = ? AND tanggal LIKE ? || '%'",
-    )
-    .all(ctx.user.id, bulan);
-  const izinSet = new Set(izinRows.map((r) => r.tanggal));
-
-  const hari: ReportHari[] = [];
-  const total = daysInMonth(bulan);
-  for (let d = 1; d <= total; d++) {
-    const tanggal = `${bulan}-${String(d).padStart(2, "0")}`;
-    hari.push({ tanggal, isWorkday: isWorkday(tanggal), isIzin: izinSet.has(tanggal) });
-  }
-
-  const [tahun, bulanAngka] = bulan.split("-").map(Number);
-  const bulanLabel = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric", timeZone: "UTC" }).format(
-    new Date(Date.UTC(tahun!, bulanAngka! - 1, 1)),
-  );
-
   const bytes = await buildMonthlyReportPdf({
     namaUser: ctx.user.nama,
-    bulanLabel,
-    hari,
-    tasks,
-    taskDatesWorked,
+    bulanLabel: agg.bulanLabel,
+    hari: agg.hari,
+    tasks: agg.tasks,
+    taskDatesWorked: agg.taskDatesWorked,
     aktivitas,
     lampiran,
   });
@@ -174,4 +193,40 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
       "Content-Disposition": `attachment; filename="laporan-${slug(ctx.user.nama)}-${bulan}.pdf"`,
     },
   });
+}
+
+// Pratinjau di layar sebelum cetak (ADR-0019 "Rencana lanjutan") — supaya user bisa mengecek ada
+// tidaknya hari kerja yang masih kosong (belum ada realisasi) sebelum benar-benar mengunduh PDF.
+export async function handleMonthlyReportPreview(req: Request, hariIniOverride?: string): Promise<Response> {
+  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
+  const ctx = getAuthContext(token);
+  if (!ctx) return errorResponse(401, "Belum login.");
+
+  const url = new URL(req.url);
+  const bulan = url.searchParams.get("bulan");
+  if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
+
+  const agg = await aggregateMonthlyReport(ctx.user.id, bulan);
+
+  const items = agg.rows.map((r) => ({
+    no: agg.taskNoMap.get(r.taskId)!,
+    tanggal: r.tanggal,
+    tanggalLabel: tanggalLabel(r.tanggal),
+    projectNama: r.projectNama,
+    kegiatan: taskLabel(r.deskripsi, r.tag),
+    catatan: r.catatan,
+    status: r.taskStatus === "closed" ? "Selesai" : "Proses",
+    lampiranCount: (agg.attachmentsByLog.get(r.taskLogId) ?? []).length,
+  }));
+
+  // Hari kerja yang belum ada realisasi sama sekali — dibatasi sampai hari ini biar tanggal
+  // yang belum kejadian (masa depan) tidak ikut ditandai "kosong". Rencana-tanpa-realisasi
+  // tetap dianggap kosong (cuma realisasi yang dihitung "sudah ada").
+  const hariIni = hariIniOverride ?? todayJakarta();
+  const tanggalAdaRealisasi = new Set(agg.rows.map((r) => r.tanggal));
+  const tanggalKosong = agg.hari
+    .filter((h) => h.isWorkday && !h.isIzin && h.tanggal <= hariIni && !tanggalAdaRealisasi.has(h.tanggal))
+    .map((h) => h.tanggal);
+
+  return json({ bulan, bulanLabel: agg.bulanLabel, items, tanggalKosong });
 }

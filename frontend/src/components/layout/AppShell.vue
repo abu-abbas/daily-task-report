@@ -12,6 +12,7 @@ const route = useRoute();
 const pageTitle = computed(() => ({
   input: "Input harian",
   riwayat: "Riwayat",
+  laporan: "Laporan",
   "admin-users": "Kelola user",
   "admin-projects": "Kelola project",
 }[String(route.name)] ?? "Ruang kerja"));

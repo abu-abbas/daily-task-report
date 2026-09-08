@@ -27,10 +27,11 @@ Selesai 2026-09-08. Sebelum template Word asli tersedia, dibangun cicilan awal b
 - Font standar `pdf-lib` (WinAnsi/CP1252) tidak bisa encode glyph checkbox Unicode (☐/☑), ditemukan lewat error runtime saat verifikasi. Awalnya diganti ASCII `[ ]`/`[x]`, lalu disederhanakan lagi (2026-09-08) jadi bullet "•" biasa buat checklist maupun bullet — status tercentang/belum tidak berarti apa-apa di dokumen cetak yang tidak interaktif, beda dari tampilan UI (`MiniMarkdownText.vue`) yang tetap pakai `<input type="checkbox">` sungguhan.
 - Layout Word asli per tipe programmer (inti ADR ini) masih menunggu template dan Q-06 — PDF generik ini tidak menggantikannya.
 
-## Rencana lanjutan (belum dikerjakan)
+## Halaman Laporan tersendiri + pratinjau sebelum cetak
 
-Catatan arahan user (2026-09-08) buat putaran berikutnya, sebelum benar-benar mencetak PDF:
+Selesai 2026-09-08 (permintaan user sehari sebelumnya, langsung dikerjakan). Ekspor PDF generik pindah dari widget kecil di Riwayat jadi **halaman sendiri** (`/laporan`, nav item baru di sidebar), default menampilkan bulan berjalan. Widget lama di Riwayat (Popover bulan-terbaru + grid bulan/tahun) **dipindah seluruhnya** ke sini — Riwayat kembali fokus ke heatmap+daftar Realisasi saja.
 
-- Ekspor PDF generik pindah dari widget kecil di Riwayat jadi **halaman sendiri**, default menampilkan bulan berjalan (bukan widget prev/next kecil yang sekarang nempel di Riwayat).
-- Sebelum tombol unduh/cetak PDF, ada tombol "Tampilkan" yang menampilkan **pratinjau di layar** — daftar mirip tabel "Aktifitas Pekerjaan" (tanggal, project, kegiatan, dst) dari data bulan yang dipilih.
-- Tujuan pratinjau ini: user bisa mengecek dulu apakah ada tanggal yang masih kosong/belum ada realisasi sebelum mencetak, bukan baru ketahuan setelah PDF jadi.
+- Sebelum tombol unduh PDF, ada tombol **"Tampilkan"** yang menampilkan pratinjau di layar — tabel mirip "Aktifitas Pekerjaan" (No, Tanggal, Aplikasi/Modul, Kegiatan, Catatan, Status, Lampiran), diambil dari `GET /api/reports/monthly-preview?bulan=` (endpoint baru, berbagi fungsi agregasi data (`aggregateMonthlyReport`) yang sama dengan endpoint PDF — cuma beda cara menyajikan hasilnya, bukan query terpisah). Catatan dikirim RAW (markdown asli) supaya bisa dirender pakai `MiniMarkdownText.vue` yang sudah ada di UI (reuse, bukan versi teks-polos ala PDF).
+- **Callout "N hari kerja belum ada realisasi"** muncul kalau ada hari kerja (`isWorkday`) di bulan itu yang bukan izin dan belum ada realisasi — dibatasi sampai hari ini (`todayJakarta()`) supaya tanggal di masa depan yang belum waktunya tidak ikut ditandai kosong. Ini yang memenuhi tujuan awal: user bisa mengecek dulu ada tidaknya tanggal kosong sebelum mencetak, bukan baru ketahuan setelah PDF jadi.
+- Tombol "Unduh laporan (PDF)" tetap selalu aktif (tidak digembok di belakang "Tampilkan") — pratinjau itu bantuan opsional, bukan gate wajib.
+- Popover pemilih bulan di halaman baru ini pakai ulang persis pola yang sudah diperbaiki di widget Riwayat sebelumnya (satu `Popover` dua tampilan internal, bukan `DropdownMenu`+`Popover` terpisah — lihat catatan bug focus-race di `docs/stages/07-ekspor-word.md`) — dipindah, bukan ditulis ulang dari nol.

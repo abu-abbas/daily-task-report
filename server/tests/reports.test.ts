@@ -8,13 +8,29 @@ process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test
 
 const { db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
+const { isWorkday } = await import("../src/kalender");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleCreateTask } = await import("../src/routes/tasks");
-const { handleMonthlyReportPdf } = await import("../src/routes/reports");
+const { handleMonthlyReportPdf, handleMonthlyReportPreview } = await import("../src/routes/reports");
 
 const TENAGA_EMAIL = "tenaga.reports@example.test";
 const PASSWORD = "kata-sandi-aman";
 const BULAN = "2026-03";
+// hariIniOverride tetap buat test tanggalKosong — supaya deterministik, tidak gantung jam
+// sungguhan. Cari tanggal workday nyata (bukan tebak manual hari-dalam-minggu) buat kandidat
+// "kosong" (sebelum hariIni, bukan 05/10 yang sudah kepakai) dan "masa depan" (setelah hariIni).
+const HARI_INI_PREVIEW = "2026-03-15";
+function cariWorkday(dariHari: number, sampaiHari: number, kecuali: number[]): string {
+  for (let d = dariHari; d <= sampaiHari; d++) {
+    if (kecuali.includes(d)) continue;
+    const tanggal = `${BULAN}-${String(d).padStart(2, "0")}`;
+    if (isWorkday(tanggal)) return tanggal;
+  }
+  throw new Error(`Tidak ketemu workday di rentang ${dariHari}-${sampaiHari}`);
+}
+// Dihitung di beforeAll (butuh tabel holidays sudah ada lewat runMigrations()).
+let TANGGAL_KOSONG_HARAPAN: string;
+let TANGGAL_MASA_DEPAN: string;
 
 let tenagaId: number;
 let tenagaToken: string;
@@ -29,6 +45,8 @@ function req(path: string, token?: string): Request {
 
 beforeAll(async () => {
   runMigrations();
+  TANGGAL_KOSONG_HARAPAN = cariWorkday(1, 15, [5, 10]);
+  TANGGAL_MASA_DEPAN = cariWorkday(16, 31, []);
   const hash = await Bun.password.hash(PASSWORD);
 
   const tenagaResult = db
@@ -134,5 +152,55 @@ describe("GET /api/reports/monthly", () => {
     const bytes = new Uint8Array(await res.arrayBuffer());
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBeGreaterThan(0);
+  });
+});
+
+describe("GET /api/reports/monthly-preview", () => {
+  test("ditolak tanpa login", async () => {
+    const res = await handleMonthlyReportPreview(req(`/api/reports/monthly-preview?bulan=${BULAN}`));
+    expect(res.status).toBe(401);
+  });
+
+  test("ditolak (400) format bulan salah", async () => {
+    const res = await handleMonthlyReportPreview(req("/api/reports/monthly-preview?bulan=2026-3", tenagaToken));
+    expect(res.status).toBe(400);
+  });
+
+  test("items cocok data seed — tanggal/project/kegiatan/catatan RAW/status/lampiranCount", async () => {
+    const res = await handleMonthlyReportPreview(
+      req(`/api/reports/monthly-preview?bulan=${BULAN}`, tenagaToken),
+      HARI_INI_PREVIEW,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: {
+        tanggal: string;
+        projectNama: string;
+        kegiatan: string;
+        catatan: string | null;
+        status: string;
+        lampiranCount: number;
+      }[];
+    };
+    const item = body.items.find((i) => i.tanggal === `${BULAN}-05`)!;
+    expect(item).toBeDefined();
+    expect(item.projectNama).toBe("Project Reports");
+    expect(item.kegiatan).toBe("feat(reports): Task Reports");
+    expect(item.catatan).toBe("- Poin satu\n- Poin dua"); // RAW markdown, bukan hasil catatanToLines
+    expect(item.status).toBe("Proses"); // task belum ditutup
+    expect(item.lampiranCount).toBe(1);
+  });
+
+  test("tanggalKosong: hari kerja tanpa realisasi sampai hariIni masuk, izin dan masa depan tidak", async () => {
+    const res = await handleMonthlyReportPreview(
+      req(`/api/reports/monthly-preview?bulan=${BULAN}`, tenagaToken),
+      HARI_INI_PREVIEW,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { tanggalKosong: string[] };
+    expect(body.tanggalKosong).toContain(TANGGAL_KOSONG_HARAPAN);
+    expect(body.tanggalKosong).not.toContain(`${BULAN}-05`); // ada realisasi
+    expect(body.tanggalKosong).not.toContain(`${BULAN}-10`); // izin, bukan kosong
+    expect(body.tanggalKosong).not.toContain(TANGGAL_MASA_DEPAN); // setelah hariIni
   });
 });

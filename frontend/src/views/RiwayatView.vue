@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { ChevronLeft, ChevronRight, FileDown } from "@lucide/vue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogHeader, DialogScrollContent, DialogTitle } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ActivityHeatmap from "@/components/input-harian/ActivityHeatmap.vue";
 import ActivityLogList from "@/components/input-harian/ActivityLogList.vue";
 import KendalaList from "@/components/input-harian/KendalaList.vue";
@@ -13,8 +11,7 @@ import AttachmentList from "@/components/input-harian/AttachmentList.vue";
 import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
 import { groupByProject } from "@/lib/groupByProject";
-import { formatTanggalPanjang, LOCALE } from "@/lib/locale";
-import { monthlyReportPdfUrl } from "@/lib/api";
+import { formatTanggalPanjang } from "@/lib/locale";
 import { useMyProjectsQuery } from "@/composables/useProjects";
 import { useActivityHeatmapQuery, useRiwayatDetailQuery } from "@/composables/useRiwayat";
 
@@ -24,41 +21,6 @@ const projectsQuery = useMyProjectsQuery();
 const projects = computed(() => projectsQuery.data.value?.projects ?? []);
 const projectFilter = ref<string>("all");
 const projectIdFilter = computed(() => (projectFilter.value === "all" ? undefined : Number(projectFilter.value)));
-
-// Widget kecil khusus ekspor laporan (Stage 7 cicilan awal, ADR-0019) — Riwayat sendiri tidak
-// lagi punya picker bulan (diganti heatmap+daftar Realisasi). Satu Popover dengan dua "tampilan"
-// internal (daftar 3 bulan terbaru, lalu grid bulan/tahun kalau "Bulan lainnya" diklik) — SENGAJA
-// bukan dua overlay terpisah (DropdownMenu lalu Popover): menutup DropdownMenu mengembalikan
-// focus ke tombol trigger, yang oleh Popover manapun yang baru dibuka dianggap "focus di luar"
-// dan langsung membatalkannya (dicoba, direproduksi lewat Playwright, terkonfirmasi via watcher
-// state — bukan tebakan). Toggle tampilan di dalam SATU overlay yang sama menghindari race itu.
-const laporanPopoverOpen = ref(false);
-const tampilkanPemilihBulan = ref(false);
-function tutupLaporanPopover(open: boolean) {
-  laporanPopoverOpen.value = open;
-  if (!open) tampilkanPemilihBulan.value = false;
-}
-
-const bulanTerbaruFormatter = new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" });
-interface BulanOpsi {
-  bulan: string;
-  label: string;
-}
-const bulanTerbaruOptions = computed<BulanOpsi[]>(() => {
-  const now = new Date();
-  return Array.from({ length: 3 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const bulan = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    return { bulan, label: bulanTerbaruFormatter.format(d) };
-  });
-});
-
-const bulanLainnyaTahun = ref(new Date().getFullYear());
-const NAMA_BULAN_PENDEK_FMT = new Intl.DateTimeFormat(LOCALE, { month: "short" });
-const namaBulanPendek = Array.from({ length: 12 }, (_, i) => NAMA_BULAN_PENDEK_FMT.format(new Date(2000, i, 1)));
-function bulanLainnyaUrl(bulanIndex: number): string {
-  return monthlyReportPdfUrl(`${bulanLainnyaTahun.value}-${String(bulanIndex + 1).padStart(2, "0")}`);
-}
 
 const heatmapQuery = useActivityHeatmapQuery(projectIdFilter);
 
@@ -119,62 +81,6 @@ const detailRencana = computed(() =>
       :sampai="heatmapQuery.data.value.sampai"
       @select-tanggal="pilihTanggalHeatmap"
     />
-
-    <div class="flex items-center gap-2">
-      <Popover :open="laporanPopoverOpen" @update:open="tutupLaporanPopover">
-          <PopoverTrigger as-child>
-            <Button>
-              <FileDown class="size-4" />
-              Unduh laporan (PDF)
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" class="w-56 p-1">
-            <div v-if="!tampilkanPemilihBulan" class="grid gap-0.5">
-              <a
-                v-for="opt in bulanTerbaruOptions"
-                :key="opt.bulan"
-                :href="monthlyReportPdfUrl(opt.bulan)"
-                target="_blank"
-                class="rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                @click="laporanPopoverOpen = false"
-              >
-                {{ opt.label }}
-              </a>
-              <div class="my-1 border-t" />
-              <button
-                type="button"
-                class="rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-                @click="tampilkanPemilihBulan = true"
-              >
-                Bulan lainnya…
-              </button>
-            </div>
-            <div v-else class="grid gap-1 p-1">
-              <div class="flex items-center justify-between pb-1">
-                <Button variant="ghost" size="icon" aria-label="Tahun sebelumnya" @click="bulanLainnyaTahun--">
-                  <ChevronLeft class="size-4" />
-                </Button>
-                <span class="text-sm font-medium">{{ bulanLainnyaTahun }}</span>
-                <Button variant="ghost" size="icon" aria-label="Tahun berikutnya" @click="bulanLainnyaTahun++">
-                  <ChevronRight class="size-4" />
-                </Button>
-              </div>
-              <div class="grid grid-cols-3 gap-1">
-                <a
-                  v-for="(nama, i) in namaBulanPendek"
-                  :key="i"
-                  :href="bulanLainnyaUrl(i)"
-                  target="_blank"
-                  class="rounded-md border px-2 py-1.5 text-center text-sm hover:bg-accent"
-                  @click="laporanPopoverOpen = false"
-                >
-                  {{ nama }}
-                </a>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-    </div>
 
     <ActivityLogList
       :project-id="projectIdFilter"
