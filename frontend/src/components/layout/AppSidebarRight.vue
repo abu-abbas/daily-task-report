@@ -154,7 +154,7 @@ async function confirmDelete() {
 </script>
 
 <template>
-  <Sidebar collapsible="none" class="sticky top-0 hidden h-svh border-l lg:flex" style="--sidebar-width: 225px">
+  <Sidebar collapsible="none" class="sticky top-0 hidden h-svh border-l lg:flex" style="--sidebar-width: 255px">
     <SidebarHeader class="h-16 flex-row items-center justify-end border-b border-sidebar-border">
       <Button variant="ghost" size="icon" aria-label="Ganti tema" @click="toggle">
         <Sun v-if="theme === 'dark'" class="size-4" />
