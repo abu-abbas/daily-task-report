@@ -305,8 +305,17 @@ const totalAttachmentAkanHilang = computed(() =>
 
 <template>
   <div class="grid gap-4 pb-24">
-    <div>
-      <h1 class="text-lg font-semibold">Input Harian</h1>
+    <div class="sticky top-0 -mx-5 -mt-5 z-10 flex items-center justify-between gap-2 border-b bg-background px-5 pb-4 pt-5">
+      <div class="flex-1">
+        <h1 class="text-lg font-semibold leading-snug">Input Harian</h1>
+        <div class="text-muted-foreground text-sm leading-snug">
+          Catat apa yang kamu kerjakan kemarin dan rencanamu untuk hari ini.
+        </div>
+      </div>
+      <Button size="lg" class="ml-auto" :disabled="!canSave || query.isPending.value || query.isError.value" @click="confirmOpen = true">
+        <Send class="size-4" />
+        Simpan
+      </Button>
     </div>
 
     <p v-if="query.isPending.value" class="text-sm text-muted-foreground">Memuat data...</p>
@@ -338,232 +347,225 @@ const totalAttachmentAkanHilang = computed(() =>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
-      <Card>
-        <CardHeader class="flex flex-row items-center gap-3 space-y-0">
-          <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-            <CircleCheck class="size-5" aria-hidden="true" />
-          </div>
-          <div class="grid gap-0.5">
-            <CardTitle class="text-base">Realisasi</CardTitle>
-            <CardDescription>{{ formatTanggalPanjang(data.hariKerjaSebelumnya) }}</CardDescription>
-          </div>
-          <Badge variant="secondary" class="ml-auto shrink-0">
-            {{ data.checklist.length + data.tambahan.length }} pekerjaan
-          </Badge>
-        </CardHeader>
-        <CardContent class="grid gap-4">
-          <div v-if="checklistEmpty" class="grid gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-            <p>Tidak ada rencana tercatat untuk hari kerja sebelumnya.</p>
-            <Button type="button" size="sm" variant="outline" class="justify-self-start" @click="tambahanDialogOpen = true">
-              Tambah kerjaan kemarin (manual)
-            </Button>
-          </div>
+        <Card>
+          <CardHeader class="flex flex-row items-center gap-3 space-y-0">
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <CircleCheck class="size-5" aria-hidden="true" />
+            </div>
+            <div class="grid gap-0.5">
+              <CardTitle class="text-base leading-snug">Realisasi</CardTitle>
+              <CardDescription>{{ formatTanggalPanjang(data.hariKerjaSebelumnya) }}</CardDescription>
+            </div>
+            <Badge variant="secondary" class="ml-auto shrink-0 self-start">
+              {{ data.checklist.length + data.tambahan.length }} pekerjaan
+            </Badge>
+          </CardHeader>
+          <CardContent class="grid gap-4">
+            <div v-if="checklistEmpty" class="grid gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              <p>Tidak ada rencana tercatat untuk hari kerja sebelumnya.</p>
+              <Button type="button" size="sm" variant="outline" class="justify-self-start" @click="tambahanDialogOpen = true">
+                Tambah kerjaan kemarin (manual)
+              </Button>
+            </div>
 
-          <div v-else class="grid gap-2">
-            <div v-for="group in checklistGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3">
-              <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
-              <div
-                v-for="item in group.items"
-                :key="item.taskId"
-                class="grid gap-2 border-t pt-2 first:border-t-0 first:pt-0"
-              >
-                <label :for="`realisasi-${item.taskId}`" class="flex items-start gap-2 text-sm">
-                  <Checkbox
-                    :id="`realisasi-${item.taskId}`"
-                    :model-value="checklistDrafts[item.taskId]?.checked ?? false"
-                    @update:model-value="(v) => (checklistDrafts[item.taskId]!.checked = v === true)"
-                  />
-                  <span class="grid gap-1">
-                    <span class="flex flex-wrap items-center gap-1">
-                      <span class="font-medium">{{ item.deskripsi }}</span>
-                      <Badge v-if="item.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
-                    </span>
-                    <Badge v-if="item.tag" variant="secondary" class="w-fit">{{ item.tag }}</Badge>
-                  </span>
-                </label>
-                <MiniMarkdownEditor
-                  v-if="checklistDrafts[item.taskId]?.checked"
-                  v-model="checklistDrafts[item.taskId]!.catatan"
-                  aria-label="Catatan hasil"
-                  placeholder="Catatan hasil (wajib)"
-                  rows="2"
-                />
-                <p
-                  v-if="checklistDrafts[item.taskId]?.checked && !checklistDrafts[item.taskId]!.catatan.trim()"
-                  class="text-sm text-destructive"
+            <div v-else class="grid gap-2">
+              <div v-for="group in checklistGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3">
+                <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
+                <div
+                  v-for="item in group.items"
+                  :key="item.taskId"
+                  class="grid gap-2 border-t pt-2 first:border-t-0 first:pt-0"
                 >
-                  Catatan hasil wajib diisi.
-                </p>
-                <KendalaList
-                  v-if="checklistDrafts[item.taskId]?.checked"
-                  :task-log-id="item.taskLogId"
-                  :items="item.kendala"
-                />
-                <AttachmentList
-                  v-if="checklistDrafts[item.taskId]?.checked"
-                  :task-log-id="item.taskLogId"
-                  :items="item.attachments"
-                />
+                  <label :for="`realisasi-${item.taskId}`" class="flex items-start gap-2 text-sm">
+                    <Checkbox
+                      :id="`realisasi-${item.taskId}`"
+                      :model-value="checklistDrafts[item.taskId]?.checked ?? false"
+                      @update:model-value="(v) => (checklistDrafts[item.taskId]!.checked = v === true)"
+                    />
+                    <span class="grid gap-1">
+                      <span class="flex flex-wrap items-center gap-1">
+                        <span class="font-medium">{{ item.deskripsi }}</span>
+                        <Badge v-if="item.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
+                      </span>
+                      <Badge v-if="item.tag" variant="secondary" class="w-fit">{{ item.tag }}</Badge>
+                    </span>
+                  </label>
+                  <MiniMarkdownEditor
+                    v-if="checklistDrafts[item.taskId]?.checked"
+                    v-model="checklistDrafts[item.taskId]!.catatan"
+                    aria-label="Catatan hasil"
+                    placeholder="Catatan hasil (wajib)"
+                    rows="2"
+                  />
+                  <p
+                    v-if="checklistDrafts[item.taskId]?.checked && !checklistDrafts[item.taskId]!.catatan.trim()"
+                    class="text-sm text-destructive"
+                  >
+                    Catatan hasil wajib diisi.
+                  </p>
+                  <KendalaList
+                    v-if="checklistDrafts[item.taskId]?.checked"
+                    :task-log-id="item.taskLogId"
+                    :items="item.kendala"
+                  />
+                  <AttachmentList
+                    v-if="checklistDrafts[item.taskId]?.checked"
+                    :task-log-id="item.taskLogId"
+                    :items="item.attachments"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          <div class="grid gap-3">
-            <h3 class="text-sm font-medium">Kerjaan diluar rencana</h3>
+            <div class="grid gap-3">
+              <h3 class="text-sm font-medium">Kerjaan diluar rencana</h3>
 
-            <div v-if="data.tambahan.length > 0" class="grid gap-2">
-              <div v-for="group in tambahanGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
-                <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
-                <div v-for="t in group.items" :key="t.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
-                  <div class="flex items-start justify-between gap-2">
-                    <p class="font-medium">{{ t.deskripsi }}</p>
-                    <div class="flex shrink-0 items-center gap-1">
-                      <Badge v-if="t.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
-                      <Tooltip v-else>
-                        <TooltipTrigger as-child>
-                          <Button variant="ghost" size="icon-sm" aria-label="Tandai selesai" @click="openCloseDialog(t)">
-                            <CircleCheck class="size-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Tandai selesai</TooltipContent>
-                      </Tooltip>
+              <div v-if="data.tambahan.length > 0" class="grid gap-2">
+                <div v-for="group in tambahanGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
+                  <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
+                  <div v-for="t in group.items" :key="t.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
+                    <div class="flex items-start justify-between gap-2">
+                      <p class="font-medium">{{ t.deskripsi }}</p>
+                      <div class="flex shrink-0 items-center gap-1">
+                        <Badge v-if="t.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
+                        <Tooltip v-else>
+                          <TooltipTrigger as-child>
+                            <Button variant="ghost" size="icon-sm" aria-label="Tandai selesai" @click="openCloseDialog(t)">
+                              <CircleCheck class="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Tandai selesai</TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
+                    <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
+                    <KendalaList :task-log-id="t.taskLogId" :items="t.kendala" />
+                    <AttachmentList :task-log-id="t.taskLogId" :items="t.attachments" />
                   </div>
-                  <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
-                  <KendalaList :task-log-id="t.taskLogId" :items="t.kendala" />
-                  <AttachmentList :task-log-id="t.taskLogId" :items="t.attachments" />
                 </div>
               </div>
-            </div>
 
-            <div v-if="tambahanDrafts.length > 0" class="grid gap-2">
-              <div v-for="d in tambahanDrafts" :key="d.key" class="flex items-start justify-between gap-2 rounded-md border p-3 text-sm">
-                <div class="grid gap-1">
-                  <span class="font-medium">{{ draftLabel(d) }}</span>
-                  <MiniMarkdownText v-if="d.catatan" :text="d.catatan" class="text-muted-foreground" />
+              <div v-if="tambahanDrafts.length > 0" class="grid gap-2">
+                <div v-for="d in tambahanDrafts" :key="d.key" class="flex items-start justify-between gap-2 rounded-md border p-3 text-sm">
+                  <div class="grid gap-1">
+                    <span class="font-medium">{{ draftLabel(d) }}</span>
+                    <MiniMarkdownText v-if="d.catatan" :text="d.catatan" class="text-muted-foreground" />
+                  </div>
+                  <Button variant="ghost" size="sm" @click="removeTambahan(d.key)">Hapus</Button>
                 </div>
-                <Button variant="ghost" size="sm" @click="removeTambahan(d.key)">Hapus</Button>
               </div>
+
+              <Dialog v-model:open="tambahanDialogOpen">
+                <DialogTrigger as-child>
+                  <Button type="button" size="sm" variant="outline" class="justify-self-start">
+                    <Plus class="mr-1 size-4" />
+                    Tambah kerjaan
+                  </Button>
+                </DialogTrigger>
+                <DialogContent class="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Tambah kerjaan</DialogTitle>
+                  </DialogHeader>
+                  <TaskPickerForm
+                    require-catatan
+                    :existing-catatan-by-task-id="tambahanCatatanByTaskId"
+                    @add="addTambahan"
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader class="flex flex-row items-center gap-3 space-y-0">
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-500">
+              <Clock class="size-5" aria-hidden="true" />
+            </div>
+            <div class="grid gap-0.5">
+              <CardTitle class="text-base leading-snug">{{ izinAktif ? "Izin" : "Rencana" }}</CardTitle>
+              <CardDescription>{{ formatTanggalPanjang(data.tanggal) }}</CardDescription>
+            </div>
+            <Badge v-if="!izinAktif" variant="secondary" class="ml-auto shrink-0  self-start">
+              {{ data.rencanaHariIni.length }} rencana
+            </Badge>
+          </CardHeader>
+          <CardContent class="grid gap-3">
+            <label class="flex items-start gap-2 text-sm">
+              <Checkbox :model-value="izinAktif" @update:model-value="(v) => (izinAktif = v === true)" />
+              <span class="grid gap-0.5">
+                <span class="font-medium">Izin/ tidak masuk</span>
+                <span class="text-xs text-muted-foreground">Realisasi hari kerja sebelumnya tetap bisa diisi.</span>
+              </span>
+            </label>
+
+            <div v-if="izinAktif" class="grid gap-2">
+              <Select v-model="izinJenis">
+                <SelectTrigger class="w-full">
+                  <SelectValue placeholder="Jenis" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cuti">Cuti</SelectItem>
+                  <SelectItem value="sakit">Sakit</SelectItem>
+                  <SelectItem value="izin">Izin</SelectItem>
+                </SelectContent>
+              </Select>
+              <Textarea v-model="izinAlasan" placeholder="Alasan (opsional)" rows="2" />
             </div>
 
-            <Dialog v-model:open="tambahanDialogOpen">
-              <DialogTrigger as-child>
-                <Button type="button" size="sm" variant="outline" class="justify-self-start">
-                  <Plus class="mr-1 size-4" />
-                  Tambah kerjaan
-                </Button>
-              </DialogTrigger>
-              <DialogContent class="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Tambah kerjaan</DialogTitle>
-                </DialogHeader>
-                <TaskPickerForm
-                  require-catatan
-                  :existing-catatan-by-task-id="tambahanCatatanByTaskId"
-                  @add="addTambahan"
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader class="flex flex-row items-center gap-3 space-y-0">
-          <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-500">
-            <Clock class="size-5" aria-hidden="true" />
-          </div>
-          <div class="grid gap-0.5">
-            <CardTitle class="text-base">{{ izinAktif ? "Izin" : "Rencana" }}</CardTitle>
-            <CardDescription>{{ formatTanggalPanjang(data.tanggal) }}</CardDescription>
-          </div>
-          <Badge v-if="!izinAktif" variant="secondary" class="ml-auto shrink-0">
-            {{ data.rencanaHariIni.length }} rencana
-          </Badge>
-        </CardHeader>
-        <CardContent class="grid gap-3">
-          <label class="flex items-start gap-2 text-sm">
-            <Checkbox :model-value="izinAktif" @update:model-value="(v) => (izinAktif = v === true)" />
-            <span class="grid gap-0.5">
-              <span class="font-medium">Izin/ tidak masuk</span>
-              <span class="text-xs text-muted-foreground">Realisasi hari kerja sebelumnya tetap bisa diisi.</span>
-            </span>
-          </label>
-
-          <div v-if="izinAktif" class="grid gap-2">
-            <Select v-model="izinJenis">
-              <SelectTrigger class="w-full">
-                <SelectValue placeholder="Jenis" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cuti">Cuti</SelectItem>
-                <SelectItem value="sakit">Sakit</SelectItem>
-                <SelectItem value="izin">Izin</SelectItem>
-              </SelectContent>
-            </Select>
-            <Textarea v-model="izinAlasan" placeholder="Alasan (opsional)" rows="2" />
-          </div>
-
-          <template v-else>
-            <div v-if="data.rencanaHariIni.length > 0" class="grid gap-2">
-              <div v-for="group in rencanaGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
-                <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
-                <div v-for="r in group.items" :key="r.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
-                  <div class="flex items-start justify-between gap-2">
-                    <p class="font-medium">{{ r.deskripsi }}</p>
-                    <div class="flex shrink-0 items-center gap-1">
-                      <Badge v-if="r.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
-                      <Tooltip v-else>
-                        <TooltipTrigger as-child>
-                          <Button variant="ghost" size="icon-sm" aria-label="Tandai selesai" @click="openCloseDialog(r)">
-                            <CircleCheck class="size-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Tandai selesai</TooltipContent>
-                      </Tooltip>
+            <template v-else>
+              <div v-if="data.rencanaHariIni.length > 0" class="grid gap-2">
+                <div v-for="group in rencanaGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
+                  <ProjectBadge :nama="group.projectNama" class="justify-self-start" />
+                  <div v-for="r in group.items" :key="r.taskId" class="grid gap-1 border-t pt-2 first:border-t-0 first:pt-0">
+                    <div class="flex items-start justify-between gap-2">
+                      <p class="font-medium">{{ r.deskripsi }}</p>
+                      <div class="flex shrink-0 items-center gap-1">
+                        <Badge v-if="r.taskStatus === 'closed'" variant="secondary">Ditutup</Badge>
+                        <Tooltip v-else>
+                          <TooltipTrigger as-child>
+                            <Button variant="ghost" size="icon-sm" aria-label="Tandai selesai" @click="openCloseDialog(r)">
+                              <CircleCheck class="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Tandai selesai</TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
+                    <MiniMarkdownText v-if="r.catatan" :text="r.catatan" class="text-xs text-muted-foreground" />
                   </div>
-                  <MiniMarkdownText v-if="r.catatan" :text="r.catatan" class="text-xs text-muted-foreground" />
                 </div>
               </div>
-            </div>
 
-            <div v-if="rencanaDrafts.length > 0" class="grid gap-2">
-              <div v-for="d in rencanaDrafts" :key="d.key" class="flex items-center justify-between rounded-md border p-3 text-sm">
-                <span>{{ draftLabel(d) }}</span>
-                <Button variant="ghost" size="sm" @click="removeRencana(d.key)">Hapus</Button>
+              <div v-if="rencanaDrafts.length > 0" class="grid gap-2">
+                <div v-for="d in rencanaDrafts" :key="d.key" class="flex items-center justify-between rounded-md border p-3 text-sm">
+                  <span>{{ draftLabel(d) }}</span>
+                  <Button variant="ghost" size="sm" @click="removeRencana(d.key)">Hapus</Button>
+                </div>
               </div>
-            </div>
 
-            <Dialog v-model:open="rencanaDialogOpen">
-              <DialogTrigger as-child>
-                <Button type="button" size="sm" variant="outline" class="justify-self-start">
-                  <Plus class="mr-1 size-4" />
-                  Tambah rencana
-                </Button>
-              </DialogTrigger>
-              <DialogContent class="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Tambah rencana</DialogTitle>
-                </DialogHeader>
-                <TaskPickerForm
-                  :existing-catatan-by-task-id="rencanaCatatanByTaskId"
-                  @add="addRencana"
-                />
-              </DialogContent>
-            </Dialog>
-          </template>
-        </CardContent>
-      </Card>
-      </div>
-
-      <div class="flex justify-end">
-        <Button size="lg" :disabled="!canSave" @click="confirmOpen = true">
-          Simpan
-          <Send class="size-4" />
-        </Button>
+              <Dialog v-model:open="rencanaDialogOpen">
+                <DialogTrigger as-child>
+                  <Button type="button" size="sm" variant="outline" class="justify-self-start">
+                    <Plus class="mr-1 size-4" />
+                    Tambah rencana
+                  </Button>
+                </DialogTrigger>
+                <DialogContent class="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Tambah rencana</DialogTitle>
+                  </DialogHeader>
+                  <TaskPickerForm
+                    :existing-catatan-by-task-id="rencanaCatatanByTaskId"
+                    @add="addRencana"
+                  />
+                </DialogContent>
+              </Dialog>
+            </template>
+          </CardContent>
+        </Card>
       </div>
 
       <AlertDialog v-model:open="confirmOpen">
