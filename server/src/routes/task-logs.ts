@@ -14,6 +14,32 @@ interface ChecklistRow {
   taskStatus: "open" | "closed";
 }
 
+interface KendalaPublic {
+  id: number;
+  taskLogId: number;
+  deskripsi: string;
+  status: "open" | "resolved";
+}
+
+// Kendala cuma untuk log realisasi (ADR-0015) — dipanggil sekali per taskLogId yang relevan
+// (checklist + tambahan hari ini), bukan query N+1 per item.
+function kendalaByTaskLogId(taskLogIds: number[]): Map<number, KendalaPublic[]> {
+  const map = new Map<number, KendalaPublic[]>();
+  if (taskLogIds.length === 0) return map;
+  const placeholders = taskLogIds.map(() => "?").join(",");
+  const rows = db
+    .query<{ id: number; taskLogId: number; deskripsi: string; status: "open" | "resolved" }, number[]>(
+      `SELECT id, task_log_id AS taskLogId, deskripsi, status FROM kendala WHERE task_log_id IN (${placeholders})`,
+    )
+    .all(...taskLogIds);
+  for (const row of rows) {
+    const list = map.get(row.taskLogId) ?? [];
+    list.push(row);
+    map.set(row.taskLogId, list);
+  }
+  return map;
+}
+
 interface RencanaChecklistRow extends ChecklistRow {
   rencanaCatatan: string | null;
 }
@@ -59,20 +85,18 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
     .all(ctx.user.id, hariKerjaSebelumnya);
 
   const realisasiRows = db
-    .query<{ taskId: number; catatan: string | null; isExtra: number }, [number, string]>(
-      `SELECT task_id AS taskId, catatan, is_extra AS isExtra FROM task_logs
+    .query<{ id: number; taskId: number; catatan: string | null; isExtra: number }, [number, string]>(
+      `SELECT id, task_id AS taskId, catatan, is_extra AS isExtra FROM task_logs
        WHERE user_id = ? AND tanggal = ? AND jenis = 'realisasi'`,
     )
     .all(ctx.user.id, hariKerjaSebelumnya);
   const realisasiByTask = new Map(
-    realisasiRows.filter((r) => r.isExtra === 0).map((r) => [r.taskId, r.catatan]),
+    realisasiRows.filter((r) => r.isExtra === 0).map((r) => [r.taskId, { taskLogId: r.id, catatan: r.catatan }]),
   );
 
-  const checklist = checklistRows.map((r) => ({ ...r, realisasiCatatan: realisasiByTask.get(r.taskId) ?? null }));
-
   const tambahan = db
-    .query<ChecklistRow & { catatan: string | null }, [number, string]>(
-      `SELECT tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.status AS taskStatus, t.project_id AS projectId, p.nama AS projectNama
+    .query<ChecklistRow & { taskLogId: number; catatan: string | null }, [number, string]>(
+      `SELECT tl.id AS taskLogId, tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.status AS taskStatus, t.project_id AS projectId, p.nama AS projectNama
        FROM task_logs tl
        JOIN tasks t ON t.id = tl.task_id
        JOIN projects p ON p.id = t.project_id
@@ -80,6 +104,26 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
        ORDER BY t.deskripsi`,
     )
     .all(ctx.user.id, hariKerjaSebelumnya);
+
+  // Kendala cuma untuk log realisasi (ADR-0015): checklist yang sudah pernah direalisasi +
+  // kerjaan tambahan hari ini, diambil sekali jalan lalu ditempel per taskLogId.
+  const relevantTaskLogIds = [
+    ...realisasiRows.filter((r) => r.isExtra === 0).map((r) => r.id),
+    ...tambahan.map((r) => r.taskLogId),
+  ];
+  const kendalaMap = kendalaByTaskLogId(relevantTaskLogIds);
+
+  const checklist = checklistRows.map((r) => {
+    const realisasi = realisasiByTask.get(r.taskId);
+    return {
+      ...r,
+      realisasiCatatan: realisasi?.catatan ?? null,
+      taskLogId: realisasi?.taskLogId ?? null,
+      kendala: realisasi ? (kendalaMap.get(realisasi.taskLogId) ?? []) : [],
+    };
+  });
+
+  const tambahanWithKendala = tambahan.map((r) => ({ ...r, kendala: kendalaMap.get(r.taskLogId) ?? [] }));
 
   const rencanaHariIni = db
     .query<ChecklistRow & { catatan: string | null }, [number, string]>(
@@ -98,7 +142,15 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
     )
     .get(ctx.user.id, tanggal);
 
-  return json({ tanggal, hariIni, hariKerjaSebelumnya, checklist, tambahan, rencanaHariIni, izin: izin ?? null });
+  return json({
+    tanggal,
+    hariIni,
+    hariKerjaSebelumnya,
+    checklist,
+    tambahan: tambahanWithKendala,
+    rencanaHariIni,
+    izin: izin ?? null,
+  });
 }
 
 // projectBaru (bukan projectId): usulan project "Lainnya" (ADR-0042) dibuat di saveItem()

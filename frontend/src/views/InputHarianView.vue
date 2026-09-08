@@ -34,6 +34,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import TaskPickerForm from "@/components/input-harian/TaskPickerForm.vue";
+import KendalaList from "@/components/input-harian/KendalaList.vue";
 import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
 import MiniMarkdownEditor from "@/components/input-harian/MiniMarkdownEditor.vue";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
@@ -365,6 +366,11 @@ const rencanaTersimpanAkanDihapus = computed(() =>
                 >
                   Catatan hasil wajib diisi.
                 </p>
+                <KendalaList
+                  v-if="checklistDrafts[item.taskId]?.checked"
+                  :task-log-id="item.taskLogId"
+                  :items="item.kendala"
+                />
               </div>
             </div>
           </div>
@@ -393,6 +399,7 @@ const rencanaTersimpanAkanDihapus = computed(() =>
                     </div>
                   </div>
                   <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
+                  <KendalaList :task-log-id="t.taskLogId" :items="t.kendala" />
                 </div>
               </div>
             </div>
@@ -509,7 +516,7 @@ const rencanaTersimpanAkanDihapus = computed(() =>
         </CardContent>
       </Card>
 
-      <div class="flex justify-end border-t pt-4">
+      <div class="flex justify-end">
         <Button size="lg" :disabled="!canSave" @click="confirmOpen = true">Simpan</Button>
       </div>
 

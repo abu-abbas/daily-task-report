@@ -1,0 +1,107 @@
+<script setup lang="ts">
+import { ref } from "vue";
+import { toast } from "vue-sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { ApiError, type KendalaItem } from "@/lib/api";
+import { useCreateKendala, useDeleteKendala, useResolveKendala } from "@/composables/useTaskLogs";
+
+const props = defineProps<{
+  taskLogId: number | null;
+  items: KendalaItem[];
+}>();
+
+const createMutation = useCreateKendala();
+const deleteMutation = useDeleteKendala();
+const resolveMutation = useResolveKendala();
+
+const formOpen = ref(false);
+const draftDeskripsi = ref("");
+
+// Kendala cuma bisa ditambahkan ke log yang sudah tersimpan (ADR-0015) — endpoint independen
+// dari simpan harian, langsung panggil API begitu diklik, bukan ikut tombol Simpan besar.
+async function submitKendala() {
+  if (props.taskLogId === null || !draftDeskripsi.value.trim()) return;
+  try {
+    await createMutation.mutateAsync({ taskLogId: props.taskLogId, deskripsi: draftDeskripsi.value.trim() });
+    draftDeskripsi.value = "";
+    formOpen.value = false;
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "Gagal menambah kendala, coba lagi.");
+  }
+}
+
+async function resolve(id: number) {
+  try {
+    await resolveMutation.mutateAsync(id);
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "Gagal menandai kendala selesai, coba lagi.");
+  }
+}
+
+async function remove(id: number) {
+  try {
+    await deleteMutation.mutateAsync(id);
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "Gagal menghapus kendala, coba lagi.");
+  }
+}
+
+function batalTambah() {
+  formOpen.value = false;
+  draftDeskripsi.value = "";
+}
+</script>
+
+<template>
+  <div class="grid gap-1.5">
+    <div
+      v-for="k in items"
+      :key="k.id"
+      class="flex items-start justify-between gap-2 rounded-md border border-dashed p-2 text-xs"
+    >
+      <span class="flex items-start gap-1.5">
+        <Badge :variant="k.status === 'resolved' ? 'secondary' : 'outline'" class="shrink-0">
+          {{ k.status === "resolved" ? "Selesai" : "Kendala" }}
+        </Badge>
+        <span>{{ k.deskripsi }}</span>
+      </span>
+      <div class="flex shrink-0 gap-1">
+        <Button
+          v-if="k.status === 'open'"
+          type="button"
+          variant="ghost"
+          size="sm"
+          :disabled="resolveMutation.isPending.value"
+          @click="resolve(k.id)"
+        >
+          Tandai selesai
+        </Button>
+        <Button type="button" variant="ghost" size="sm" :disabled="deleteMutation.isPending.value" @click="remove(k.id)">
+          Hapus
+        </Button>
+      </div>
+    </div>
+
+    <div v-if="formOpen" class="grid gap-1.5">
+      <Textarea v-model="draftDeskripsi" placeholder="Ceritakan kendala pada pekerjaan ini" rows="2" />
+      <div class="flex gap-1.5">
+        <Button size="sm" :disabled="!draftDeskripsi.trim() || createMutation.isPending.value" @click="submitKendala">
+          {{ createMutation.isPending.value ? "Menyimpan..." : "Tambah" }}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" @click="batalTambah">Batal</Button>
+      </div>
+    </div>
+    <Button
+      v-else-if="taskLogId !== null"
+      type="button"
+      size="sm"
+      variant="outline"
+      class="justify-self-start"
+      @click="formOpen = true"
+    >
+      + Tambah kendala
+    </Button>
+  </div>
+</template>

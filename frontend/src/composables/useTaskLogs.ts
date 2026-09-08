@@ -2,7 +2,10 @@ import { computed, type Ref } from "vue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import {
   cancelLeave,
+  createKendala,
+  deleteKendala,
   fetchDailyInput,
+  resolveKendala,
   saveDailyInput,
   saveLeave,
   type IzinJenis,
@@ -44,6 +47,31 @@ export function useCancelLeave() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (tanggal: string) => cancelLeave(tanggal),
+    onSuccess: () => invalidateDailyInput(queryClient),
+  });
+}
+
+export function useCreateKendala() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskLogId, deskripsi }: { taskLogId: number; deskripsi: string }) =>
+      createKendala(taskLogId, deskripsi),
+    onSuccess: () => invalidateDailyInput(queryClient),
+  });
+}
+
+export function useDeleteKendala() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteKendala(id),
+    onSuccess: () => invalidateDailyInput(queryClient),
+  });
+}
+
+export function useResolveKendala() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => resolveKendala(id),
     onSuccess: () => invalidateDailyInput(queryClient),
   });
 }

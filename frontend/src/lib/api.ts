@@ -166,6 +166,13 @@ export const closeTask = (taskId: number, deskripsiPenutupan?: string) =>
     body: JSON.stringify({ deskripsiPenutupan }),
   });
 
+export interface KendalaItem {
+  id: number;
+  taskLogId: number;
+  deskripsi: string;
+  status: "open" | "resolved";
+}
+
 export interface ChecklistItem {
   taskId: number;
   deskripsi: string;
@@ -175,16 +182,20 @@ export interface ChecklistItem {
   projectNama: string;
   rencanaCatatan: string | null;
   realisasiCatatan: string | null;
+  taskLogId: number | null;
+  kendala: KendalaItem[];
 }
 
 export interface TambahanItem {
   taskId: number;
+  taskLogId: number;
   catatan: string | null;
   deskripsi: string;
   tag: string | null;
   taskStatus: "open" | "closed";
   projectId: number;
   projectNama: string;
+  kendala: KendalaItem[];
 }
 
 export interface RencanaHariIniItem {
@@ -255,3 +266,16 @@ export const saveLeave = (payload: { tanggal: string; jenis: IzinJenis; alasan?:
 
 export const cancelLeave = (tanggal: string) =>
   api<{ tanggal: string }>(`/leaves/${tanggal}`, { method: "DELETE" });
+
+// ADR-0015: kendala cuma untuk log realisasi yang sudah tersimpan, endpoint berdiri sendiri
+// (bukan bagian dari saveDailyInput) — aksi kecil independen, sama seperti closeTask/saveLeave.
+export const createKendala = (taskLogId: number, deskripsi: string) =>
+  api<{ kendala: KendalaItem }>("/kendala", {
+    method: "POST",
+    body: JSON.stringify({ taskLogId, deskripsi }),
+  });
+
+export const deleteKendala = (id: number) => api<void>(`/kendala/${id}`, { method: "DELETE" });
+
+export const resolveKendala = (id: number) =>
+  api<{ kendala: KendalaItem }>(`/kendala/${id}/resolve`, { method: "POST" });

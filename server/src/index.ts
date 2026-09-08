@@ -15,6 +15,7 @@ import {
 import { handleCloseTask, handleCreateTask, handleListTasks } from "./routes/tasks";
 import { handleGetDailyInput, handleSaveDailyInput } from "./routes/task-logs";
 import { handleCancelLeave, handleSaveLeave } from "./routes/leaves";
+import { handleCreateKendala, handleDeleteKendala, handleResolveKendala } from "./routes/kendala";
 
 runMigrations();
 
@@ -51,6 +52,9 @@ Bun.serve({
     "/api/task-logs": { POST: (req) => handleSaveDailyInput(req) },
     "/api/leaves": { POST: (req) => handleSaveLeave(req) },
     "/api/leaves/:tanggal": { DELETE: (req) => handleCancelLeave(req, req.params.tanggal) },
+    "/api/kendala": { POST: (req) => handleCreateKendala(req) },
+    "/api/kendala/:id": { DELETE: (req) => handleDeleteKendala(req, Number(req.params.id)) },
+    "/api/kendala/:id/resolve": { POST: (req) => handleResolveKendala(req, Number(req.params.id)) },
   },
   fetch() {
     return new Response("Not found", { status: 404 });
