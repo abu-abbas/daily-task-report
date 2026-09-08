@@ -282,6 +282,20 @@ const ringkasan = computed(() => {
 const rencanaTersimpanAkanDihapus = computed(() =>
   izinAktif.value ? (data.value?.rencanaHariIni.length ?? 0) : 0,
 );
+
+// Efek uncheck checklist realisasi (ADR-0044) menghapus baris realisasi tersimpan — dan karena
+// kendala menempel ke baris itu (ON DELETE CASCADE, ADR-0015), ikut terhapus diam-diam kalau
+// tidak diperingatkan dulu di sini.
+const checklistKendalaAkanHilang = computed(() =>
+  (data.value?.checklist ?? []).filter((item) => {
+    const draft = checklistDrafts.value[item.taskId];
+    const akanDiuncheck = item.realisasiCatatan !== null && !draft?.checked;
+    return akanDiuncheck && item.kendala.length > 0;
+  }),
+);
+const totalKendalaAkanHilang = computed(() =>
+  checklistKendalaAkanHilang.value.reduce((total, item) => total + item.kendala.length, 0),
+);
 </script>
 
 <template>
@@ -532,6 +546,11 @@ const rencanaTersimpanAkanDihapus = computed(() =>
             <p v-if="rencanaTersimpanAkanDihapus > 0" class="text-sm text-destructive">
               {{ rencanaTersimpanAkanDihapus }} rencana yang sudah tersimpan di tanggal ini akan terhapus karena izin
               diaktifkan.
+            </p>
+            <p v-if="checklistKendalaAkanHilang.length > 0" class="text-sm text-destructive">
+              {{ checklistKendalaAkanHilang.length }} checklist yang di-uncheck sudah punya
+              {{ totalKendalaAkanHilang }} kendala tercatat — realisasi dan kendalanya akan ikut terhapus kalau
+              disimpan.
             </p>
           </AlertDialogHeader>
           <AlertDialogFooter>
