@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogHeader, DialogScrollContent, DialogTitle } from "@/components/ui/dialog";
 import ActivityHeatmap from "@/components/input-harian/ActivityHeatmap.vue";
+import ActivityLogList from "@/components/input-harian/ActivityLogList.vue";
 import KendalaList from "@/components/input-harian/KendalaList.vue";
 import AttachmentList from "@/components/input-harian/AttachmentList.vue";
 import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
@@ -23,7 +24,16 @@ const projectIdFilter = computed(() => (projectFilter.value === "all" ? undefine
 
 const heatmapQuery = useActivityHeatmapQuery(projectIdFilter);
 
-// Satu tanggal terbuka dalam satu waktu — detail baru di-fetch (lazy) begitu kotaknya diklik.
+// Klik kotak heatmap memfilter daftar Realisasi di bawahnya ke tanggal itu (bukan langsung buka
+// Dialog) — hindari dua jalur "lihat detail" yang tumpang tindih (heatmap dan daftar sama-sama
+// bisa buka Dialog). Klik kotak yang sama lagi membatalkan filter.
+const tanggalFilterHeatmap = ref<string | null>(null);
+function pilihTanggalHeatmap(tanggal: string) {
+  tanggalFilterHeatmap.value = tanggalFilterHeatmap.value === tanggal ? null : tanggal;
+}
+
+// Satu tanggal terbuka dalam satu waktu — detail baru di-fetch (lazy) begitu baris daftar
+// Realisasi diklik.
 const tanggalTerpilih = ref<string | null>(null);
 function bukaTanggal(tanggal: string) {
   tanggalTerpilih.value = tanggal;
@@ -44,22 +54,24 @@ const detailRencana = computed(() =>
 
 <template>
   <div class="grid gap-4 pb-24">
-    <div>
-      <h1 class="text-lg font-semibold">Riwayat</h1>
-      <p class="text-sm text-muted-foreground">Aktivitas realisasi 12 bulan terakhir. Klik kotak untuk lihat detail.</p>
+    <div class="flex items-center justify-between">
+      <div class="flex-1">
+        <h1 class="text-lg font-semibold">Riwayat</h1>
+        <p class="text-sm text-muted-foreground">Aktivitas realisasi 12 bulan terakhir.</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <Select v-model="projectFilter">
+          <SelectTrigger class="w-full sm:w-56">
+            <SelectValue placeholder="Semua project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua project</SelectItem>
+            <SelectItem v-for="p in projects" :key="p.id" :value="String(p.id)">{{ p.nama }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2">
-      <Select v-model="projectFilter">
-        <SelectTrigger class="w-full sm:w-56">
-          <SelectValue placeholder="Semua project" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Semua project</SelectItem>
-          <SelectItem v-for="p in projects" :key="p.id" :value="String(p.id)">{{ p.nama }}</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
 
     <p v-if="heatmapQuery.isPending.value" class="text-sm text-muted-foreground">Memuat...</p>
     <p v-else-if="heatmapQuery.isError.value" class="text-sm text-destructive">Gagal memuat, coba muat ulang.</p>
@@ -68,7 +80,14 @@ const detailRencana = computed(() =>
       :hari="heatmapQuery.data.value.hari"
       :dari="heatmapQuery.data.value.dari"
       :sampai="heatmapQuery.data.value.sampai"
+      @select-tanggal="pilihTanggalHeatmap"
+    />
+
+    <ActivityLogList
+      :project-id="projectIdFilter"
+      :tanggal-filter="tanggalFilterHeatmap"
       @select-tanggal="bukaTanggal"
+      @clear-filter="tanggalFilterHeatmap = null"
     />
 
     <Dialog :open="tanggalTerpilih !== null" @update:open="tutupDialog">

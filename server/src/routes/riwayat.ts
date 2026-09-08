@@ -21,7 +21,10 @@ interface RiwayatLogRow {
 
 // 12 bulan kalender penuh berakhir hari ini, dipangkas ke tanggal 1 supaya label bulan di
 // heatmap rapi (tidak potong di tengah bulan) — dihitung dari hari ini SUNGGUHAN di server,
-// bukan input klien, sama alasan dalamBulanBerjalan menghitung sendiri dari todayJakarta().
+// bukan input klien, sama alasan dalamBulanBerjalan menghitung sendiri dari todayJakarta(). Query
+// tetap ringan di rentang ini — cuma filter user_id+tanggal (index idx_task_logs_user_tanggal)
+// lalu GROUP BY, bukan full scan. Grid-nya biasanya lebih lebar dari lebar konten default
+// (max-w-3xl) — ActivityHeatmap.vue auto-scroll ke bulan terbaru, bukan dipendekkan rentangnya.
 function rentangHeatmap(hariIni: string): { dari: string; sampai: string } {
   const [y, m] = hariIni.split("-").map(Number);
   const mulai = new Date(Date.UTC(y, m - 1 - 11, 1));
@@ -57,6 +60,90 @@ export function handleGetActivityHeatmap(req: Request, hariIniOverride?: string)
   const hari = rows.map((r) => ({ tanggal: r.tanggal, realisasiCount: r.c }));
 
   return json({ dari, sampai, hari });
+}
+
+interface ActivityLogRow {
+  taskLogId: number;
+  tanggal: string;
+  deskripsi: string;
+  tag: string | null;
+  projectNama: string;
+}
+
+const LOG_PAGE_SIZE = 20;
+
+// Cursor "tanggal|taskLogId" — bukan offset, supaya insert/hapus log di tengah pemuatan tidak
+// menggeser halaman berikutnya (ADR-0041 identitas item pun sama alasannya hindari offset).
+function parseCursor(cursor: string | null): { tanggal: string; taskLogId: number } | null {
+  if (!cursor) return null;
+  const idx = cursor.lastIndexOf("|");
+  if (idx === -1) return null;
+  const tanggal = cursor.slice(0, idx);
+  const taskLogId = Number(cursor.slice(idx + 1));
+  if (!TANGGAL_RE.test(tanggal) || !Number.isInteger(taskLogId)) return null;
+  return { tanggal, taskLogId };
+}
+
+// Batas aman satu tanggal — realistis tidak akan pernah sebanyak ini dalam sehari, cuma jaga-jaga
+// dari LIMIT tanpa batas kalau data testing/nyangkut aneh.
+const TANGGAL_FILTER_LIMIT = 200;
+
+// Daftar realisasi, terbuka dua mode lewat query string:
+// - tanpa `tanggal`: lintas waktu (tidak dibatasi rentang heatmap), terbaru dulu, dipaginasi lazy
+//   (cursor) — feed utama di bawah heatmap.
+// - dengan `tanggal`: heatmap diklik untuk memfilter feed ke satu tanggal itu saja (bukan buka
+//   Dialog langsung — hindari dua jalur "lihat detail" yang tumpang tindih); tidak dipaginasi,
+//   `cursor` diabaikan kalau `tanggal` ada.
+export function handleListActivityLog(req: Request): Response {
+  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
+  const ctx = getAuthContext(token);
+  if (!ctx) return errorResponse(401, "Belum login.");
+
+  const url = new URL(req.url);
+  const projectIdParam = url.searchParams.get("projectId");
+  const projectId = projectIdParam ? Number(projectIdParam) : null;
+  const tanggalFilter = url.searchParams.get("tanggal");
+  if (tanggalFilter && !TANGGAL_RE.test(tanggalFilter)) {
+    return errorResponse(400, "Format tanggal tidak valid.");
+  }
+  const cursor = tanggalFilter ? null : parseCursor(url.searchParams.get("cursor"));
+
+  const params: (number | string)[] = [ctx.user.id];
+  let where = "tl.user_id = ? AND tl.jenis = 'realisasi'";
+  if (projectId) {
+    where += " AND t.project_id = ?";
+    params.push(projectId);
+  }
+  if (tanggalFilter) {
+    where += " AND tl.tanggal = ?";
+    params.push(tanggalFilter);
+  } else if (cursor) {
+    where += " AND (tl.tanggal < ? OR (tl.tanggal = ? AND tl.id < ?))";
+    params.push(cursor.tanggal, cursor.tanggal, cursor.taskLogId);
+  }
+  const limit = tanggalFilter ? TANGGAL_FILTER_LIMIT : LOG_PAGE_SIZE + 1;
+  params.push(limit);
+
+  const rows = db
+    .query<ActivityLogRow, (number | string)[]>(
+      `SELECT tl.id AS taskLogId, tl.tanggal, t.deskripsi, t.tag, p.nama AS projectNama
+       FROM task_logs tl
+       JOIN tasks t ON t.id = tl.task_id
+       JOIN projects p ON p.id = t.project_id
+       WHERE ${where}
+       ORDER BY tl.tanggal DESC, tl.id DESC
+       LIMIT ?`,
+    )
+    .all(...params);
+
+  if (tanggalFilter) return json({ items: rows, nextCursor: null });
+
+  const hasMore = rows.length > LOG_PAGE_SIZE;
+  const items = hasMore ? rows.slice(0, LOG_PAGE_SIZE) : rows;
+  const last = items[items.length - 1];
+  const nextCursor = hasMore && last ? `${last.tanggal}|${last.taskLogId}` : null;
+
+  return json({ items, nextCursor });
 }
 
 export function handleGetRiwayatDetail(req: Request, tanggal: string, hariIniOverride?: string): Response {

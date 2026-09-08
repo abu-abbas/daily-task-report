@@ -320,6 +320,28 @@ export const fetchActivityHeatmap = (projectId?: number) => {
   return api<{ dari: string; sampai: string; hari: ActivityHeatmapHari[] }>(`/activity-heatmap${query}`);
 };
 
+// Daftar realisasi lintas waktu (tidak dibatasi rentang heatmap), terbaru dulu, dipaginasi lazy
+// pakai cursor "tanggal|taskLogId" — pelengkap heatmap di bawahnya.
+export interface ActivityLogItem {
+  taskLogId: number;
+  tanggal: string;
+  deskripsi: string;
+  tag: string | null;
+  projectNama: string;
+}
+
+// `tanggal` (dari klik heatmap) memfilter feed ke satu tanggal itu saja, tidak dipaginasi —
+// `cursor` diabaikan server kalau `tanggal` dikirim.
+export const fetchActivityLog = (params: { projectId?: number; cursor?: string | null; tanggal?: string | null }) => {
+  const query = new URLSearchParams();
+  if (params.projectId) query.set("projectId", String(params.projectId));
+  if (params.tanggal) query.set("tanggal", params.tanggal);
+  else if (params.cursor) query.set("cursor", params.cursor);
+  const qs = query.toString();
+  const path = qs ? `/activity-log?${qs}` : "/activity-log";
+  return api<{ items: ActivityLogItem[]; nextCursor: string | null }>(path);
+};
+
 // ADR-0034: baca histori sendiri tidak terikat bulan berjalan (beda dari Input Harian) — cuma
 // dipakai buat tentukan tautan "Edit" (bolehEdit) di detail, bukan gate baca.
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, ref, watchEffect } from "vue";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatTanggalPanjang, LOCALE } from "@/lib/locale";
 import type { ActivityHeatmapHari } from "@/lib/api";
@@ -81,31 +82,53 @@ function bucket(count: number): number {
   if (ratio <= 0.75) return 3;
   return 4;
 }
+
+// Grid 12 bulan biasanya lebih lebar dari lebar konten default (max-w-3xl), apalagi di mobile —
+// tanpa ini defaultnya nge-scroll ke kiri (bulan paling lama), menyembunyikan bulan berjalan yang
+// justru paling relevan. Scroll ke ujung kanan tiap kali grid berubah (mis. ganti filter project)
+// — lebar gridnya konstan (rentang selalu 12 bulan sama), jadi aman diulang. ScrollArea (reka-ui)
+// tidak mengekspos viewport-nya lewat prop/emit, jadi diambil manual lewat data-slot bawaannya.
+const scrollAreaRef = ref<InstanceType<typeof ScrollArea> | null>(null);
+watchEffect(() => {
+  if (weeks.value.length > 0) {
+    nextTick(() => {
+      const rootEl = scrollAreaRef.value?.$el as HTMLElement | undefined;
+      const viewport = rootEl?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+      if (viewport) viewport.scrollLeft = viewport.scrollWidth;
+    });
+  }
+});
 </script>
 
 <template>
-  <div class="overflow-x-auto pb-2">
-    <div class="flex w-max gap-0.75">
+  <ScrollArea ref="scrollAreaRef" class="w-full min-w-0 pb-2">
+    <div class="p-2.5 flex w-max gap-0.75">
       <div v-for="(minggu, i) in weeks" :key="i" class="grid gap-0.75">
-        <div class="h-3 text-[10px] leading-3 text-muted-foreground">{{ labelBulan(minggu) }}</div>
+        <div class="relative mb-3 h-2">
+          <div class="absolute left-0 top-0 text-sm leading-3 text-muted-foreground">{{ labelBulan(minggu) }}</div>
+        </div>
         <template v-for="sel in minggu" :key="sel.tanggal">
           <Tooltip v-if="sel.inRange">
             <TooltipTrigger as-child>
               <button
                 type="button"
                 :data-tanggal="sel.tanggal"
-                class="size-3 rounded-sm transition-colors hover:ring-1 hover:ring-ring"
+                class="size-3 rounded-[0.165rem] transition-colors hover:ring-1 hover:ring-ring"
                 :class="BUCKET_CLASS[bucket(sel.count)]"
                 @click="emit('select-tanggal', sel.tanggal)"
               />
             </TooltipTrigger>
             <TooltipContent>
-              {{ formatTanggalPanjang(sel.tanggal) }} — {{ sel.count }} realisasi
+              <div class="flex flex-col items-center">
+                <span class="text-2sm font-semibold">{{ sel.count }} realisasi</span>
+                <span class="text-xs">{{ formatTanggalPanjang(sel.tanggal) }}</span>
+              </div>
             </TooltipContent>
           </Tooltip>
           <div v-else class="size-3" />
         </template>
       </div>
     </div>
-  </div>
+    <ScrollBar orientation="horizontal" />
+  </ScrollArea>
 </template>

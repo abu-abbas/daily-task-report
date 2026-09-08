@@ -17,7 +17,7 @@ import { handleGetDailyInput, handleSaveDailyInput } from "./routes/task-logs";
 import { handleCancelLeave, handleSaveLeave } from "./routes/leaves";
 import { handleCreateKendala, handleDeleteKendala, handleResolveKendala } from "./routes/kendala";
 import { handleDeleteAttachment, handleGetAttachmentFile, handleUploadAttachment } from "./routes/attachments";
-import { handleGetActivityHeatmap, handleGetRiwayatDetail } from "./routes/riwayat";
+import { handleGetActivityHeatmap, handleGetRiwayatDetail, handleListActivityLog } from "./routes/riwayat";
 
 runMigrations();
 
@@ -61,6 +61,7 @@ Bun.serve({
     "/api/attachments/:id": { DELETE: (req) => handleDeleteAttachment(req, Number(req.params.id)) },
     "/api/attachments/:id/file": { GET: (req) => handleGetAttachmentFile(req, Number(req.params.id)) },
     "/api/activity-heatmap": { GET: (req) => handleGetActivityHeatmap(req) },
+    "/api/activity-log": { GET: (req) => handleListActivityLog(req) },
     "/api/history/:tanggal": { GET: (req) => handleGetRiwayatDetail(req, req.params.tanggal) },
   },
   fetch() {
