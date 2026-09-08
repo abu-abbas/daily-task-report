@@ -26,3 +26,11 @@ Selesai 2026-09-08. Sebelum template Word asli tersedia, dibangun cicilan awal b
 - `pdf-lib` dipakai murni (bukan render HTML-ke-PDF) karena tabel/warna kustom dan embed gambar JPG/PNG langsung dari file attachment yang sudah ada — tanpa dependency headless-browser tambahan.
 - Font standar `pdf-lib` (WinAnsi/CP1252) tidak bisa encode glyph checkbox Unicode (☐/☑) — catatan markdown checklist dirender pakai ASCII `[ ]`/`[x]` di PDF, beda dari tampilan UI (`MiniMarkdownText.vue`) yang pakai `<input type="checkbox">` sungguhan.
 - Layout Word asli per tipe programmer (inti ADR ini) masih menunggu template dan Q-06 — PDF generik ini tidak menggantikannya.
+
+## Rencana lanjutan (belum dikerjakan)
+
+Catatan arahan user (2026-09-08) buat putaran berikutnya, sebelum benar-benar mencetak PDF:
+
+- Ekspor PDF generik pindah dari widget kecil di Riwayat jadi **halaman sendiri**, default menampilkan bulan berjalan (bukan widget prev/next kecil yang sekarang nempel di Riwayat).
+- Sebelum tombol unduh/cetak PDF, ada tombol "Tampilkan" yang menampilkan **pratinjau di layar** — daftar mirip tabel "Aktifitas Pekerjaan" (tanggal, project, kegiatan, dst) dari data bulan yang dipilih.
+- Tujuan pratinjau ini: user bisa mengecek dulu apakah ada tanggal yang masih kosong/belum ada realisasi sebelum mencetak, bukan baru ketahuan setelah PDF jadi.
