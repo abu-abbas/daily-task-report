@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { toast } from "vue-sonner";
 import { CircleCheck, Trash2 } from "@lucide/vue";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,8 @@ const props = defineProps<{
 const createMutation = useCreateKendala();
 const deleteMutation = useDeleteKendala();
 const resolveMutation = useResolveKendala();
+
+const adaKendalaBelumSelesai = computed(() => props.items.some((k) => k.status === "open"));
 
 const formOpen = ref(false);
 const draftDeskripsi = ref("");
@@ -59,48 +61,52 @@ function batalTambah() {
 <template>
   <div class="grid gap-1.5">
     <div
-      v-for="k in items"
-      :key="k.id"
-      class="flex items-start justify-between gap-2 rounded-md border border-dashed p-2 text-xs"
-      :class="k.status === 'open' && 'bg-destructive/10'"
+      v-if="items.length > 0"
+      class="grid gap-1.5 rounded-md border border-dashed p-2 text-xs"
+      :class="adaKendalaBelumSelesai && 'bg-destructive/10'"
     >
-      <span class="flex items-start gap-1.5">
-        <Badge :variant="k.status === 'resolved' ? 'secondary' : 'outline'" class="shrink-0">
-          {{ k.status === "resolved" ? "Selesai" : "Kendala" }}
-        </Badge>
-        <span>{{ k.deskripsi }}</span>
-      </span>
-      <div class="flex shrink-0 items-center gap-1">
-        <Tooltip v-if="k.status === 'open'">
-          <TooltipTrigger as-child>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Tandai selesai"
-              :disabled="resolveMutation.isPending.value"
-              @click="resolve(k.id)"
-            >
-              <CircleCheck class="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Tandai selesai</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Hapus kendala"
-              :disabled="deleteMutation.isPending.value"
-              @click="remove(k.id)"
-            >
-              <Trash2 class="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Hapus</TooltipContent>
-        </Tooltip>
+      <Badge variant="outline" class="w-fit shrink-0">Kendala ({{ items.length }})</Badge>
+      <div
+        v-for="k in items"
+        :key="k.id"
+        class="flex items-start justify-between gap-2 border-t pt-1.5 first:border-t-0 first:pt-0"
+      >
+        <span class="flex items-start gap-1.5">
+          <Badge v-if="k.status === 'resolved'" variant="secondary" class="shrink-0">Selesai</Badge>
+          <span>{{ k.deskripsi }}</span>
+        </span>
+        <div class="flex shrink-0 items-center gap-1">
+          <Tooltip v-if="k.status === 'open'">
+            <TooltipTrigger as-child>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Tandai selesai"
+                :disabled="resolveMutation.isPending.value"
+                @click="resolve(k.id)"
+              >
+                <CircleCheck class="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Tandai selesai</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Hapus kendala"
+                :disabled="deleteMutation.isPending.value"
+                @click="remove(k.id)"
+              >
+                <Trash2 class="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Hapus</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </div>
 
@@ -113,6 +119,7 @@ function batalTambah() {
         <Button type="button" size="sm" variant="ghost" @click="batalTambah">Batal</Button>
       </div>
     </div>
+
     <Button
       v-else-if="taskLogId !== null"
       type="button"
