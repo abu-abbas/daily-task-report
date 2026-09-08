@@ -61,7 +61,7 @@ const kelompok = computed(() => [
             <SidebarMenu>
               <SidebarMenuItem v-for="h in grup.items" :key="h.id">
                 <SidebarMenuButton>
-                  <span class="size-1.5 shrink-0 rounded-full bg-sidebar-foreground/50" />
+                  <span :class="['size-1.5 shrink-0 rounded-full', index === 0 ? 'bg-primary' : 'bg-sidebar-foreground/50']" />
                   <span class="truncate">{{ h.nama }}</span>
                   <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ formatRentang(h) }}</span>
                 </SidebarMenuButton>

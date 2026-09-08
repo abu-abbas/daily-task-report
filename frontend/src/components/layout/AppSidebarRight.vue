@@ -154,7 +154,7 @@ async function confirmDelete() {
 </script>
 
 <template>
-  <Sidebar collapsible="none" class="sticky top-0 hidden h-svh border-l lg:flex">
+  <Sidebar collapsible="none" class="sticky top-0 hidden h-svh border-l lg:flex" style="--sidebar-width: 225px">
     <SidebarHeader class="h-16 flex-row items-center justify-end border-b border-sidebar-border">
       <Button variant="ghost" size="icon" aria-label="Ganti tema" @click="toggle">
         <Sun v-if="theme === 'dark'" class="size-4" />
@@ -165,7 +165,8 @@ async function confirmDelete() {
       <SidebarGroup class="px-0">
         <SidebarGroupContent>
           <Calendar
-            class="bg-sidebar **:[[role=gridcell]]:w-8.25"
+            class="bg-sidebar"
+            :locale="LOCALE"
             :model-value="selectedReportDate"
             :min-value="minReportDate"
             :max-value="defaultDate"

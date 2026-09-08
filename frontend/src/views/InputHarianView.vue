@@ -339,7 +339,7 @@ const totalAttachmentAkanHilang = computed(() =>
 
       <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
       <Card>
-        <CardHeader class="flex-row items-center gap-3 space-y-0">
+        <CardHeader class="flex flex-row items-center gap-3 space-y-0">
           <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
             <CircleCheck class="size-5" aria-hidden="true" />
           </div>
@@ -471,7 +471,7 @@ const totalAttachmentAkanHilang = computed(() =>
       </Card>
 
       <Card>
-        <CardHeader class="flex-row items-center gap-3 space-y-0">
+        <CardHeader class="flex flex-row items-center gap-3 space-y-0">
           <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-500">
             <Clock class="size-5" aria-hidden="true" />
           </div>
