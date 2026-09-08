@@ -18,6 +18,7 @@ import { handleCancelLeave, handleSaveLeave } from "./routes/leaves";
 import { handleCreateKendala, handleDeleteKendala, handleResolveKendala } from "./routes/kendala";
 import { handleDeleteAttachment, handleGetAttachmentFile, handleUploadAttachment } from "./routes/attachments";
 import { handleGetActivityHeatmap, handleGetRiwayatDetail, handleListActivityLog } from "./routes/riwayat";
+import { handleMonthlyReportPdf } from "./routes/reports";
 
 runMigrations();
 
@@ -63,6 +64,7 @@ Bun.serve({
     "/api/activity-heatmap": { GET: (req) => handleGetActivityHeatmap(req) },
     "/api/activity-log": { GET: (req) => handleListActivityLog(req) },
     "/api/history/:tanggal": { GET: (req) => handleGetRiwayatDetail(req, req.params.tanggal) },
+    "/api/reports/monthly": { GET: (req) => handleMonthlyReportPdf(req) },
   },
   fetch() {
     return new Response("Not found", { status: 404 });

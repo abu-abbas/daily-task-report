@@ -368,3 +368,7 @@ export interface RiwayatDetail {
 }
 
 export const fetchRiwayatDetail = (tanggal: string) => api<RiwayatDetail>(`/history/${tanggal}`);
+
+// Cicilan awal Stage 7 (ADR-0019) — laporan PDF generik per bulan, dipakai langsung sebagai
+// href (bukan fetch+blob) — cookie sesi ikut otomatis, sama pola attachmentFileUrl.
+export const monthlyReportPdfUrl = (bulan: string) => `/api/reports/monthly?bulan=${bulan}`;

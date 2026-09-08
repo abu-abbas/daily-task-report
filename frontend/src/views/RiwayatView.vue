@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { ChevronLeft, ChevronRight, FileDown } from "@lucide/vue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,7 +12,8 @@ import AttachmentList from "@/components/input-harian/AttachmentList.vue";
 import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
 import { groupByProject } from "@/lib/groupByProject";
-import { formatTanggalPanjang } from "@/lib/locale";
+import { formatTanggalPanjang, LOCALE } from "@/lib/locale";
+import { monthlyReportPdfUrl } from "@/lib/api";
 import { useMyProjectsQuery } from "@/composables/useProjects";
 import { useActivityHeatmapQuery, useRiwayatDetailQuery } from "@/composables/useRiwayat";
 
@@ -21,6 +23,25 @@ const projectsQuery = useMyProjectsQuery();
 const projects = computed(() => projectsQuery.data.value?.projects ?? []);
 const projectFilter = ref<string>("all");
 const projectIdFilter = computed(() => (projectFilter.value === "all" ? undefined : Number(projectFilter.value)));
+
+// Widget kecil khusus ekspor laporan (Stage 7 cicilan awal, ADR-0019) — Riwayat sendiri tidak
+// lagi punya picker bulan (diganti heatmap+daftar Realisasi), jadi kontrol prev/next bulan ini
+// dipakai lokal cuma buat pilih bulan laporan yang mau diunduh.
+const bulanLaporan = ref(bulanSekarangStr());
+function bulanSekarangStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+function geserBulanLaporan(delta: number) {
+  const [y, m] = bulanLaporan.value.split("-").map(Number);
+  const d = new Date(y!, m! - 1 + delta, 1);
+  bulanLaporan.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+const bulanLaporanFormatter = new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" });
+const bulanLaporanLabel = computed(() => {
+  const [y, m] = bulanLaporan.value.split("-").map(Number);
+  return bulanLaporanFormatter.format(new Date(y!, m! - 1, 1));
+});
 
 const heatmapQuery = useActivityHeatmapQuery(projectIdFilter);
 
@@ -70,6 +91,25 @@ const detailRencana = computed(() =>
           </SelectContent>
         </Select>
       </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 rounded-md border border-dashed p-2">
+      <span class="text-xs text-muted-foreground">Unduh laporan bulanan:</span>
+      <div class="flex items-center gap-1">
+        <Button variant="outline" size="icon" aria-label="Bulan sebelumnya" @click="geserBulanLaporan(-1)">
+          <ChevronLeft class="size-4" />
+        </Button>
+        <span class="w-36 text-center text-sm font-medium">{{ bulanLaporanLabel }}</span>
+        <Button variant="outline" size="icon" aria-label="Bulan berikutnya" @click="geserBulanLaporan(1)">
+          <ChevronRight class="size-4" />
+        </Button>
+      </div>
+      <Button as-child variant="outline" size="sm">
+        <a :href="monthlyReportPdfUrl(bulanLaporan)" target="_blank">
+          <FileDown class="size-4" />
+          Unduh laporan (PDF)
+        </a>
+      </Button>
     </div>
 
 

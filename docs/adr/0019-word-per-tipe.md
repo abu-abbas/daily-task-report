@@ -15,3 +15,14 @@ Ekspor menghasilkan dokumen Word per tenaga ahli per bulan, menggunakan template
 ## Konsekuensi
 
 Template belum tersedia. Jangan menganggap semua tipe menggunakan satu layout atau placeholder identik. Klasifikasi programmer, pemetaan template, dan kebijakan perubahan tipe perlu diputuskan setelah contoh diterima; lihat Q-06. Tidak membangun editor template generik.
+
+## Implementasi awal (PDF generik)
+
+Selesai 2026-09-08. Sebelum template Word asli tersedia, dibangun cicilan awal berupa ekspor **PDF generik satu layout** (bukan per tipe programmer) — tujuannya validasi data laporan (task, tanggal, catatan, lampiran, status, kalender kerja), bukan hasil akhir. Keputusan:
+
+- Cakupan akses: diri sendiri saja (generate laporan bulanan milik sendiri), sama seperti Riwayat. Akses admin/atasan generate laporan orang lain belum dibangun.
+- Isi laporan mengikuti 3 contoh dokumen nyata yang dikirim user (bukan tebakan): timesheet Gantt (task × tanggal, warna merah=libur/kuning=izin/abu=ada realisasi), tabel "Aktifitas Pekerjaan/Kegiatan" (satu baris per log realisasi, kolom Status dari `tasks.status`), dan lampiran hasil kerja (gambar + caption bernomor).
+- Rencana tidak ikut jadi baris tabel aktifitas — laporan ini murni "hasil pekerjaan" yang sudah dikerjakan. Kendala tidak ditampilkan — tidak ada di contoh dokumen.
+- `pdf-lib` dipakai murni (bukan render HTML-ke-PDF) karena tabel/warna kustom dan embed gambar JPG/PNG langsung dari file attachment yang sudah ada — tanpa dependency headless-browser tambahan.
+- Font standar `pdf-lib` (WinAnsi/CP1252) tidak bisa encode glyph checkbox Unicode (☐/☑) — catatan markdown checklist dirender pakai ASCII `[ ]`/`[x]` di PDF, beda dari tampilan UI (`MiniMarkdownText.vue`) yang pakai `<input type="checkbox">` sungguhan.
+- Layout Word asli per tipe programmer (inti ADR ini) masih menunggu template dan Q-06 — PDF generik ini tidak menggantikannya.
