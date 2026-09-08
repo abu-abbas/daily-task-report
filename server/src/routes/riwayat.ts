@@ -5,7 +5,6 @@ import { dalamBulanBerjalan, todayJakarta } from "../kalender";
 import { attachmentsByTaskLogId, kendalaByTaskLogId } from "./task-logs";
 
 const TANGGAL_RE = /^\d{4}-\d{2}-\d{2}$/;
-const BULAN_RE = /^\d{4}-\d{2}$/;
 
 interface RiwayatLogRow {
   taskLogId: number;
@@ -20,60 +19,44 @@ interface RiwayatLogRow {
   catatan: string | null;
 }
 
-// ADR-0034: tenaga ahli boleh baca histori laporannya sendiri kapan saja — beda dari Input
-// Harian, endpoint ini TIDAK menerapkan dalamBulanBerjalan sebagai gate baca (cuma dipakai
-// buat menentukan apakah tautan "Edit" ditampilkan di detail). Cakupan putaran ini: baca punya
-// sendiri saja, akses supervisi/atasan lihat riwayat bawahan belum diimplementasikan.
-export function handleListRiwayat(req: Request): Response {
+// 12 bulan kalender penuh berakhir hari ini, dipangkas ke tanggal 1 supaya label bulan di
+// heatmap rapi (tidak potong di tengah bulan) — dihitung dari hari ini SUNGGUHAN di server,
+// bukan input klien, sama alasan dalamBulanBerjalan menghitung sendiri dari todayJakarta().
+function rentangHeatmap(hariIni: string): { dari: string; sampai: string } {
+  const [y, m] = hariIni.split("-").map(Number);
+  const mulai = new Date(Date.UTC(y, m - 1 - 11, 1));
+  const dari = `${mulai.getUTCFullYear()}-${String(mulai.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  return { dari, sampai: hariIni };
+}
+
+// Heatmap aktivitas (gaya GitHub) — warna kotak murni dari jumlah log REALISASI per tanggal
+// (bukan rencana, bukan izin, ADR-0034 tetap baca-sendiri tanpa batas bulan). Dipakai
+// RiwayatView.vue sebagai satu-satunya ringkasan; klik kotak baru fetch detail lewat
+// handleGetRiwayatDetail di bawah.
+export function handleGetActivityHeatmap(req: Request, hariIniOverride?: string): Response {
   const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
   const ctx = getAuthContext(token);
   if (!ctx) return errorResponse(401, "Belum login.");
 
   const url = new URL(req.url);
-  const bulan = url.searchParams.get("bulan");
-  if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
   const projectIdParam = url.searchParams.get("projectId");
   const projectId = projectIdParam ? Number(projectIdParam) : null;
 
-  const logRows = db
-    .query<{ tanggal: string; jenis: "realisasi" | "rencana" }, (number | string)[]>(
-      `SELECT tl.tanggal, tl.jenis FROM task_logs tl
+  const { dari, sampai } = rentangHeatmap(hariIniOverride ?? todayJakarta());
+
+  const rows = db
+    .query<{ tanggal: string; c: number }, (number | string)[]>(
+      `SELECT tl.tanggal, COUNT(*) AS c FROM task_logs tl
        JOIN tasks t ON t.id = tl.task_id
-       WHERE tl.user_id = ? AND tl.tanggal LIKE ? || '%'
-       ${projectId ? "AND t.project_id = ?" : ""}`,
+       WHERE tl.user_id = ? AND tl.jenis = 'realisasi' AND tl.tanggal >= ? AND tl.tanggal <= ?
+       ${projectId ? "AND t.project_id = ?" : ""}
+       GROUP BY tl.tanggal`,
     )
-    .all(...(projectId ? [ctx.user.id, bulan, projectId] : [ctx.user.id, bulan]));
+    .all(...(projectId ? [ctx.user.id, dari, sampai, projectId] : [ctx.user.id, dari, sampai]));
 
-  const izinRows = db
-    .query<{ tanggal: string; jenis: "cuti" | "sakit" | "izin" }, [number, string]>(
-      "SELECT tanggal, jenis FROM leaves WHERE user_id = ? AND tanggal LIKE ? || '%'",
-    )
-    .all(ctx.user.id, bulan);
+  const hari = rows.map((r) => ({ tanggal: r.tanggal, realisasiCount: r.c }));
 
-  const hariMap = new Map<string, { realisasiCount: number; rencanaCount: number }>();
-  for (const row of logRows) {
-    const entry = hariMap.get(row.tanggal) ?? { realisasiCount: 0, rencanaCount: 0 };
-    if (row.jenis === "realisasi") entry.realisasiCount += 1;
-    else entry.rencanaCount += 1;
-    hariMap.set(row.tanggal, entry);
-  }
-
-  const izinMap = new Map(izinRows.map((r) => [r.tanggal, r.jenis]));
-  // Tanggal izin SELALU muncul walau projectId difilter — izin bukan spesifik project.
-  for (const tanggal of izinMap.keys()) {
-    if (!hariMap.has(tanggal)) hariMap.set(tanggal, { realisasiCount: 0, rencanaCount: 0 });
-  }
-
-  const hari = [...hariMap.entries()]
-    .map(([tanggal, count]) => ({
-      tanggal,
-      realisasiCount: count.realisasiCount,
-      rencanaCount: count.rencanaCount,
-      izin: izinMap.has(tanggal) ? { jenis: izinMap.get(tanggal)! } : null,
-    }))
-    .sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1));
-
-  return json({ bulan, hari });
+  return json({ dari, sampai, hari });
 }
 
 export function handleGetRiwayatDetail(req: Request, tanggal: string, hariIniOverride?: string): Response {

@@ -308,19 +308,20 @@ export const deleteAttachment = (id: number) => api<void>(`/attachments/${id}`, 
 // Dipakai langsung sebagai src/href — cookie sesi ikut otomatis (same-origin).
 export const attachmentFileUrl = (id: number) => `/api/attachments/${id}/file`;
 
-// ADR-0034: baca histori sendiri tidak terikat bulan berjalan (beda dari Input Harian) — cuma
-// dipakai buat tentukan tautan "Edit" (bolehEdit) di detail, bukan gate baca.
-export interface RiwayatHariItem {
+// Heatmap aktivitas (gaya GitHub) 12 bulan terakhir — warna murni dari jumlah realisasi per
+// tanggal, dihitung server (bukan rencana/izin). Menggantikan daftar-per-bulan lama.
+export interface ActivityHeatmapHari {
   tanggal: string;
   realisasiCount: number;
-  rencanaCount: number;
-  izin: { jenis: IzinJenis } | null;
 }
 
-export const fetchRiwayatBulan = (bulan: string, projectId?: number) => {
-  const query = projectId ? `?bulan=${bulan}&projectId=${projectId}` : `?bulan=${bulan}`;
-  return api<{ bulan: string; hari: RiwayatHariItem[] }>(`/history${query}`);
+export const fetchActivityHeatmap = (projectId?: number) => {
+  const query = projectId ? `?projectId=${projectId}` : "";
+  return api<{ dari: string; sampai: string; hari: ActivityHeatmapHari[] }>(`/activity-heatmap${query}`);
 };
+
+// ADR-0034: baca histori sendiri tidak terikat bulan berjalan (beda dari Input Harian) — cuma
+// dipakai buat tentukan tautan "Edit" (bolehEdit) di detail, bukan gate baca.
 
 export interface RiwayatLogItem {
   taskLogId: number;
