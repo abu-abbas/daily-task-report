@@ -24,7 +24,7 @@ Selesai 2026-09-08. Sebelum template Word asli tersedia, dibangun cicilan awal b
 - Isi laporan mengikuti 3 contoh dokumen nyata yang dikirim user (bukan tebakan): timesheet Gantt (task × tanggal, warna merah=libur/kuning=izin/abu=ada realisasi), tabel "Aktifitas Pekerjaan/Kegiatan" (satu baris per log realisasi, kolom Status dari `tasks.status`), dan lampiran hasil kerja (gambar + caption bernomor).
 - Rencana tidak ikut jadi baris tabel aktifitas — laporan ini murni "hasil pekerjaan" yang sudah dikerjakan. Kendala tidak ditampilkan — tidak ada di contoh dokumen.
 - `pdf-lib` dipakai murni (bukan render HTML-ke-PDF) karena tabel/warna kustom dan embed gambar JPG/PNG langsung dari file attachment yang sudah ada — tanpa dependency headless-browser tambahan.
-- Font standar `pdf-lib` (WinAnsi/CP1252) tidak bisa encode glyph checkbox Unicode (☐/☑) — catatan markdown checklist dirender pakai ASCII `[ ]`/`[x]` di PDF, beda dari tampilan UI (`MiniMarkdownText.vue`) yang pakai `<input type="checkbox">` sungguhan.
+- Font standar `pdf-lib` (WinAnsi/CP1252) tidak bisa encode glyph checkbox Unicode (☐/☑), ditemukan lewat error runtime saat verifikasi. Awalnya diganti ASCII `[ ]`/`[x]`, lalu disederhanakan lagi (2026-09-08) jadi bullet "•" biasa buat checklist maupun bullet — status tercentang/belum tidak berarti apa-apa di dokumen cetak yang tidak interaktif, beda dari tampilan UI (`MiniMarkdownText.vue`) yang tetap pakai `<input type="checkbox">` sungguhan.
 - Layout Word asli per tipe programmer (inti ADR ini) masih menunggu template dan Q-06 — PDF generik ini tidak menggantikannya.
 
 ## Rencana lanjutan (belum dikerjakan)

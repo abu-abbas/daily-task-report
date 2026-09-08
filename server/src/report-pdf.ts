@@ -13,16 +13,15 @@ const COLOR_PUTIH = rgb(1, 1, 1);
 const COLOR_BORDER = rgb(0.8, 0.8, 0.8);
 const COLOR_TEKS = rgb(0.1, 0.1, 0.1);
 
-// Bullet markdown `- ` jadi "• ", checkbox `- [ ]`/`- [x]` jadi "[ ] "/"[x] " — subset yang sama
-// dipahami MiniMarkdownText.vue, versi teks-polos (tanpa bold/italic) untuk kolom Tindak
-// Lanjut/Solusi di tabel aktifitas. Pakai "[ ]"/"[x]" ASCII, BUKAN glyph ☐/☑ — font standar
-// pdf-lib (WinAnsi/CP1252) tidak bisa encode karakter itu dan bikin PDF gagal dibangun total.
+// Bullet markdown `- ` dan checkbox `- [ ]`/`- [x]` sama-sama jadi "• " di PDF — status
+// tercentang/belum tidak berarti apa-apa lagi di dokumen cetak (tidak interaktif seperti UI),
+// jadi disederhanakan jadi daftar bullet biasa, bukan dipertahankan sebagai "[ ]"/"[x]".
 const CHECKBOX_RE = /^- \[([ xX])\] (.*)$/;
 export function catatanToLines(catatan: string | null): string[] {
   if (!catatan) return [];
   return catatan.split("\n").map((line) => {
     const checkbox = line.match(CHECKBOX_RE);
-    if (checkbox) return `[${checkbox[1]!.toLowerCase() === "x" ? "x" : " "}] ${checkbox[2]}`;
+    if (checkbox) return `• ${checkbox[2]}`;
     if (line.startsWith("- ")) return `• ${line.slice(2)}`;
     return line;
   });
