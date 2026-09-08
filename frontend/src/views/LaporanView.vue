@@ -235,9 +235,12 @@ function catatanUntukPratinjau(catatan: string): string {
                     <TableCell>{{ item.no }}</TableCell>
                     <TableCell class="whitespace-nowrap">{{ item.tanggalLabel }}</TableCell>
                     <TableCell>{{ item.projectNama }}</TableCell>
-                    <TableCell class="whitespace-nowrap">{{ item.kegiatan }}</TableCell>
+                    <!-- TableCell.vue bawaan sudah set whitespace-nowrap default — di-override di sini
+                         (bukan cuma dihapus) karena kegiatan (tag+deskripsi task) bisa panjang dan
+                         kalau dibiarkan nowrap bikin tabel melebar terus ke kanan, bukan wrap. -->
+                    <TableCell class="max-w-64 whitespace-normal">{{ item.kegiatan }}</TableCell>
                     <TableCell class="min-w-48">
-                      <MiniMarkdownText v-if="item.catatan" :text="catatanUntukPratinjau(item.catatan)" class="text-xs" />
+                      <MiniMarkdownText v-if="item.catatan" :text="catatanUntukPratinjau(item.catatan)" class="whitespace-normal text-xs" />
                     </TableCell>
                     <TableCell>
                       <Badge :variant="item.status === 'Selesai' ? 'secondary' : 'outline'">{{ item.status }}</Badge>
