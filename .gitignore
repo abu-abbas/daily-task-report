@@ -3,6 +3,7 @@ dist/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/attachments/
 .env
 .env.*
 !.env.example
