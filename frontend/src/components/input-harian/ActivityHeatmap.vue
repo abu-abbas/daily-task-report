@@ -105,7 +105,7 @@ watchEffect(() => {
     <div class="p-2.5 flex w-max gap-0.75">
       <div v-for="(minggu, i) in weeks" :key="i" class="grid gap-0.75">
         <div class="relative mb-3 h-2">
-          <div class="absolute left-0 top-0 text-sm leading-3 text-muted-foreground">{{ labelBulan(minggu) }}</div>
+          <div class="absolute left-0 top-0 text-xs leading-3 text-muted-foreground">{{ labelBulan(minggu) }}</div>
         </div>
         <template v-for="sel in minggu" :key="sel.tanggal">
           <Tooltip v-if="sel.inRange">
