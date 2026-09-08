@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { ChevronLeft, ChevronRight, FileDown, Paperclip } from "@lucide/vue";
+import { ChevronLeft, ChevronRight, FileSearch, FileDown, Paperclip } from "@lucide/vue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
@@ -143,7 +144,22 @@ function tanggalKosongLabel(tanggal: string): string {
       </Button>
     </div>
 
-    <template v-if="sudahTampil">
+    <Empty v-if="!sudahTampil" class="border">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <FileSearch />
+        </EmptyMedia>
+        <EmptyTitle>Belum ditampilkan</EmptyTitle>
+        <EmptyDescription>
+          Klik "Tampilkan" untuk lihat pratinjau data {{ bulanTerpilihLabel }} sebelum diunduh sebagai PDF.
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button @click="sudahTampil = true">Tampilkan</Button>
+      </EmptyContent>
+    </Empty>
+
+    <template v-else>
       <p v-if="previewQuery.isPending.value" class="text-sm text-muted-foreground">Memuat...</p>
       <p v-else-if="previewQuery.isError.value" class="text-sm text-destructive">Gagal memuat, coba muat ulang.</p>
       <template v-else-if="preview">
