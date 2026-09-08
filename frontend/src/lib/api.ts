@@ -307,3 +307,41 @@ export const deleteAttachment = (id: number) => api<void>(`/attachments/${id}`, 
 
 // Dipakai langsung sebagai src/href — cookie sesi ikut otomatis (same-origin).
 export const attachmentFileUrl = (id: number) => `/api/attachments/${id}/file`;
+
+// ADR-0034: baca histori sendiri tidak terikat bulan berjalan (beda dari Input Harian) — cuma
+// dipakai buat tentukan tautan "Edit" (bolehEdit) di detail, bukan gate baca.
+export interface RiwayatHariItem {
+  tanggal: string;
+  realisasiCount: number;
+  rencanaCount: number;
+  izin: { jenis: IzinJenis } | null;
+}
+
+export const fetchRiwayatBulan = (bulan: string, projectId?: number) => {
+  const query = projectId ? `?bulan=${bulan}&projectId=${projectId}` : `?bulan=${bulan}`;
+  return api<{ bulan: string; hari: RiwayatHariItem[] }>(`/history${query}`);
+};
+
+export interface RiwayatLogItem {
+  taskLogId: number;
+  taskId: number;
+  deskripsi: string;
+  tag: string | null;
+  taskStatus: "open" | "closed";
+  projectId: number;
+  projectNama: string;
+  jenis: "realisasi" | "rencana";
+  isExtra: boolean;
+  catatan: string | null;
+  kendala: KendalaItem[];
+  attachments: AttachmentItem[];
+}
+
+export interface RiwayatDetail {
+  tanggal: string;
+  bolehEdit: boolean;
+  izin: Izin | null;
+  items: RiwayatLogItem[];
+}
+
+export const fetchRiwayatDetail = (tanggal: string) => api<RiwayatDetail>(`/history/${tanggal}`);

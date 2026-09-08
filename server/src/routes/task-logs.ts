@@ -15,7 +15,7 @@ interface ChecklistRow {
   taskStatus: "open" | "closed";
 }
 
-interface KendalaPublic {
+export interface KendalaPublic {
   id: number;
   taskLogId: number;
   deskripsi: string;
@@ -24,7 +24,7 @@ interface KendalaPublic {
 
 // Kendala cuma untuk log realisasi (ADR-0015) — dipanggil sekali per taskLogId yang relevan
 // (checklist + tambahan hari ini), bukan query N+1 per item.
-function kendalaByTaskLogId(taskLogIds: number[]): Map<number, KendalaPublic[]> {
+export function kendalaByTaskLogId(taskLogIds: number[]): Map<number, KendalaPublic[]> {
   const map = new Map<number, KendalaPublic[]>();
   if (taskLogIds.length === 0) return map;
   const placeholders = taskLogIds.map(() => "?").join(",");
@@ -41,7 +41,7 @@ function kendalaByTaskLogId(taskLogIds: number[]): Map<number, KendalaPublic[]> 
   return map;
 }
 
-interface AttachmentPublic {
+export interface AttachmentPublic {
   id: number;
   namaAsli: string;
   fileType: string | null;
@@ -51,7 +51,7 @@ interface AttachmentPublic {
 
 // Attachment cuma untuk log realisasi (ADR-0016) — pola sama kendalaByTaskLogId, sekali jalan
 // per taskLogId yang relevan, bukan N+1.
-function attachmentsByTaskLogId(taskLogIds: number[]): Map<number, AttachmentPublic[]> {
+export function attachmentsByTaskLogId(taskLogIds: number[]): Map<number, AttachmentPublic[]> {
   const map = new Map<number, AttachmentPublic[]>();
   if (taskLogIds.length === 0) return map;
   const placeholders = taskLogIds.map(() => "?").join(",");

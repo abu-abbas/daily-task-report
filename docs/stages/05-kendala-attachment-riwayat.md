@@ -1,6 +1,6 @@
 # Stage 05 — Kendala, attachment, dan riwayat
 
-- Status: Sedang dikerjakan — kendala dan attachment per log realisasi selesai (2026-09-08); riwayat dan tautan commit GitLab menyusul.
+- Status: Sedang dikerjakan — kendala, attachment, dan riwayat (baca-sendiri) selesai (2026-09-08); tautan commit GitLab menyusul.
 - Prasyarat: Stage 4.
 - Keputusan: [ADR-0004](../adr/0004-hak-akses.md), [ADR-0009](../adr/0009-edit-submit.md), [ADR-0015](../adr/0015-kendala.md), [ADR-0016](../adr/0016-attachment.md), [ADR-0023](../adr/0023-mobile-first.md), [ADR-0024](../adr/0024-tema.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0039](../adr/0039-integrasi-commit-gitlab.md).
 
@@ -15,11 +15,11 @@
 
 ## Kriteria selesai dan pemeriksaan
 
-- [ ] Riwayat sesuai log yang tersimpan; tanggal izin tetap terlihat walaupun tidak ada log.
-- [x] Upload dengan jenis, jumlah, atau ukuran tidak sah ditolak; user tanpa hak tidak dapat mengakses file (otorisasi pemilik-saja, cakupan hierarki lebih luas menunggu Riwayat — lihat ADR-0016).
+- [x] Riwayat sesuai log yang tersimpan; tanggal izin tetap terlihat walaupun tidak ada log.
+- [x] Upload dengan jenis, jumlah, atau ukuran tidak sah ditolak; user tanpa hak tidak dapat mengakses file (otorisasi pemilik-saja, cakupan hierarki lebih luas — supervisi/atasan — masih menunggu, lihat ADR-0016 dan ADR-0034).
 - [x] Kendala terikat pada log yang benar dan hanya aktor yang berhak dapat resolve.
 - [x] Edit/kegagalan upload tidak meninggalkan attachment rusak pada laporan.
-- [ ] Riwayat dapat dibaca dan dioperasikan di mobile/laptop serta kedua tema.
+- [x] Riwayat dapat dibaca dan dioperasikan di mobile/laptop serta kedua tema.
 
 ## Dependensi terbuka
 
@@ -43,4 +43,11 @@ Aturan resolve lintas bulan pada Q-04 **selesai** (lihat [ADR-0015](../adr/0015-
 - Peringatan uncheck yang sebelumnya cuma sebut kendala (`checklistKendalaAkanHilang`) digabung jadi `checklistDataAkanHilang` yang sebut kendala **dan** lampiran sekaligus dalam satu kalimat di dialog konfirmasi simpan.
 - **Diverifikasi lewat Playwright** (akun uji sementara, data + folder `data/attachments` dev dibersihkan setelah selesai): upload JPG ke checklist → thumbnail muncul; upload PNG ke Kerjaan tambahan → thumbnail kedua muncul; hover+hapus salah satu → hilang dari daftar, yang lain tetap ada. Upload file `.txt` yang diganti nama jadi `.jpg` (menyamar) → ditolak 400 dengan toast error, membuktikan validasi baca signature asli bukan cuma ekstensi/klaim klien. Uncheck checklist yang punya kendala+lampiran sekaligus → dialog konfirmasi menampilkan "1 checklist yang di-uncheck sudah punya 1 kendala dan 2 lampiran tercatat...". Screenshot desktop+dark dan mobile+light.
 
-Riwayat dan tautan commit GitLab belum dikerjakan — putaran terpisah berikutnya.
+**Riwayat per tanggal** ([ADR-0034](../adr/0034-akses-histori.md)) — selesai 2026-09-08, cakupan baca-sendiri:
+
+- **Backend**: `server/src/routes/riwayat.ts` (baru) — `handleListRiwayat` (`GET /api/history?bulan=YYYY-MM&projectId=`, 400 format bulan salah, daftar tanggal dalam bulan dengan `realisasiCount`/`rencanaCount`/`izin`, diurutkan terbaru dulu; tanggal izin tetap muncul walau `projectId` difilter karena izin bukan spesifik project), `handleGetRiwayatDetail` (`GET /api/history/:tanggal`, 400 format tanggal salah, semua log tanggal itu dikelompokkan per project dengan kendala+lampiran menempel di item realisasi, plus `bolehEdit` dari `dalamBulanBerjalan` yang dipakai ulang dari `kalender.ts`). URL pakai Inggris (`/api/history`) konsisten arahan sebelumnya, nama file/fungsi/UI tetap "riwayat". `kendalaByTaskLogId`/`attachmentsByTaskLogId` di `task-logs.ts` diekspor (sebelumnya privat) supaya dipakai ulang tanpa duplikasi. Membaca riwayat sendiri **tidak dibatasi bulan berjalan** (beda dari Input Harian) — `dalamBulanBerjalan` di sini cuma menentukan tombol "Edit", bukan gate baca, sesuai ADR-0034.
+- **Test otomatis**: `server/tests/riwayat.test.ts` (baru, 13 test) — 401/400, hitungan realisasi/rencana benar, tanggal izin-tanpa-log tetap muncul, filter project mengecualikan tanggal tanpa log project itu tapi tetap menyertakan tanggal izin, isolasi antar user, detail kendala/lampiran cuma nempel di item realisasi, `bolehEdit` true/false lewat `hariIniOverride`. Total 148 test lolos lintas file.
+- **Frontend**: `RiwayatView.vue` (ganti placeholder) — navigasi bulan (prev/next), filter project (`Select`, opsi "Semua project"), daftar kartu tanggal (`Collapsible`, detail di-fetch lazy begitu kartu dibuka), detail dikelompokkan per project (`groupByProject`) lalu Realisasi/Rencana, catatan ditampilkan read-only lewat `MiniMarkdownText`, kendala/lampiran pakai ulang `KendalaList.vue`/`AttachmentList.vue` **tanpa modifikasi** (keduanya sudah generik lewat props `taskLogId`+`items`, jadi tetap interaktif penuh — tambah/resolve/hapus — walau tanggalnya sudah lewat bulan berjalan). Tombol "Edit laporan ini" (ke `/input?tanggal=X`) cuma muncul kalau `bolehEdit`. `useTaskLogs.ts` composable kendala/lampiran diperluas invalidate cache riwayat juga (`RIWAYAT_QUERY_PREFIX`, diekspor dari `useRiwayat.ts`) supaya Input Harian dan Riwayat tetap sinkron walau dibuka di halaman mana pun.
+- **Diverifikasi lewat Playwright** (akun uji sementara, data dihapus setelah selesai): daftar tanggal bulan berjalan sesuai seed (realisasi+kendala+lampiran, rencana, izin-tanpa-log). Buka kartu realisasi → kendala dan lampiran tampil, tombol "Edit laporan ini" ada. Buka kartu izin-tanpa-log → jenis+alasan tampil. Geser ke bulan lama (Agustus) → tombol "Edit" hilang (di luar bulan berjalan), tapi tambah kendala baru dari Riwayat tetap berhasil tersimpan (membuktikan tidak terikat jendela edit). Filter project → daftar menyesuaikan. Bulan kosong → empty state. Screenshot desktop+dark, desktop+light, dan mobile+dark — layout tetap rapi di semua kombinasi.
+
+**Cakupan yang belum dikerjakan**: akses supervisi/atasan untuk membaca riwayat bawahan (inti [ADR-0034](../adr/0034-akses-histori.md)) — putaran ini cuma baca-punya-sendiri, sama seperti Input Harian sekarang; belum ada pemilih user atau otorisasi hierarki di aplikasi. Tautan commit GitLab juga belum dikerjakan — putaran terpisah berikutnya, menunggu SSO GitLab ([ADR-0038](../adr/0038-sso-gitlab.md)).

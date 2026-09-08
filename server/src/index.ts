@@ -17,6 +17,7 @@ import { handleGetDailyInput, handleSaveDailyInput } from "./routes/task-logs";
 import { handleCancelLeave, handleSaveLeave } from "./routes/leaves";
 import { handleCreateKendala, handleDeleteKendala, handleResolveKendala } from "./routes/kendala";
 import { handleDeleteAttachment, handleGetAttachmentFile, handleUploadAttachment } from "./routes/attachments";
+import { handleGetRiwayatDetail, handleListRiwayat } from "./routes/riwayat";
 
 runMigrations();
 
@@ -59,6 +60,8 @@ Bun.serve({
     "/api/attachments": { POST: (req) => handleUploadAttachment(req) },
     "/api/attachments/:id": { DELETE: (req) => handleDeleteAttachment(req, Number(req.params.id)) },
     "/api/attachments/:id/file": { GET: (req) => handleGetAttachmentFile(req, Number(req.params.id)) },
+    "/api/history": { GET: (req) => handleListRiwayat(req) },
+    "/api/history/:tanggal": { GET: (req) => handleGetRiwayatDetail(req, req.params.tanggal) },
   },
   fetch() {
     return new Response("Not found", { status: 404 });

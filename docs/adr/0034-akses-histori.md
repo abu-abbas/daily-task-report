@@ -20,3 +20,7 @@ Pengguna menyetujui tenaga ahli tetap membaca histori miliknya setelah keluar pr
 Pergantian hubungan dapat mengubah pembaca histori: pengelola baru memperoleh cakupan dan pengelola lama kehilangan cakupan yang sudah tidak dimilikinya. Aturan yang sama berlaku pada API, detail, attachment, dan ekspor. Tidak perlu menyimpan snapshot hubungan organisasi per log untuk kebijakan akses ini.
 
 Keputusan ini mengatur baca. Kebijakan koreksi laporan pribadi setelah keluar project masih perlu dirinci pada Stage 4; jangan menyamakannya dengan izin menambah pekerjaan baru pada project lama.
+
+## Status implementasi
+
+Halaman Riwayat (Stage 5, selesai 2026-09-08) baru mengimplementasikan baris pertama: tenaga ahli membaca riwayat miliknya sendiri, tanpa batas bulan berjalan. Akses supervisi/atasan membaca histori bawahan (baris kedua dan ketiga) **belum dibangun** — belum ada pemilih user atau otorisasi hierarki di aplikasi ini sama sekali, jadi menyusul di putaran terpisah.

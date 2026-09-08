@@ -13,6 +13,7 @@ import {
   type IzinJenis,
   type SaveTaskLogItem,
 } from "@/lib/api";
+import { RIWAYAT_QUERY_PREFIX } from "@/composables/useRiwayat";
 
 export const DAILY_INPUT_QUERY_PREFIX = ["task-logs", "daily"];
 
@@ -27,6 +28,17 @@ export function useDailyInputQuery(tanggal: Ref<string | null>) {
 
 function invalidateDailyInput(queryClient: ReturnType<typeof useQueryClient>) {
   return queryClient.invalidateQueries({ queryKey: DAILY_INPUT_QUERY_PREFIX, exact: false });
+}
+
+// Kendala/attachment ditampilkan di Input Harian DAN Riwayat lewat komponen yang sama
+// (KendalaList/AttachmentList) — mutasinya harus ikut invalidate cache riwayat juga, supaya
+// halaman mana pun yang lagi dibuka tetap sinkron tanpa komponen itu perlu tahu halaman mana
+// yang memanggilnya.
+function invalidateDailyInputDanRiwayat(queryClient: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: DAILY_INPUT_QUERY_PREFIX, exact: false }),
+    queryClient.invalidateQueries({ queryKey: RIWAYAT_QUERY_PREFIX, exact: false }),
+  ]);
 }
 
 export function useSaveDailyInput() {
@@ -58,7 +70,7 @@ export function useCreateKendala() {
   return useMutation({
     mutationFn: ({ taskLogId, deskripsi }: { taskLogId: number; deskripsi: string }) =>
       createKendala(taskLogId, deskripsi),
-    onSuccess: () => invalidateDailyInput(queryClient),
+    onSuccess: () => invalidateDailyInputDanRiwayat(queryClient),
   });
 }
 
@@ -66,7 +78,7 @@ export function useDeleteKendala() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deleteKendala(id),
-    onSuccess: () => invalidateDailyInput(queryClient),
+    onSuccess: () => invalidateDailyInputDanRiwayat(queryClient),
   });
 }
 
@@ -74,7 +86,7 @@ export function useResolveKendala() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => resolveKendala(id),
-    onSuccess: () => invalidateDailyInput(queryClient),
+    onSuccess: () => invalidateDailyInputDanRiwayat(queryClient),
   });
 }
 
@@ -82,7 +94,7 @@ export function useUploadAttachment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ taskLogId, file }: { taskLogId: number; file: File }) => uploadAttachment(taskLogId, file),
-    onSuccess: () => invalidateDailyInput(queryClient),
+    onSuccess: () => invalidateDailyInputDanRiwayat(queryClient),
   });
 }
 
@@ -90,6 +102,6 @@ export function useDeleteAttachment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deleteAttachment(id),
-    onSuccess: () => invalidateDailyInput(queryClient),
+    onSuccess: () => invalidateDailyInputDanRiwayat(queryClient),
   });
 }
