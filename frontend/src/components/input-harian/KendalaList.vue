@@ -67,7 +67,7 @@ function batalTambah() {
     >
       <Badge variant="outline" class="w-fit shrink-0">
         <div class="bg-destructive size-1.5 rounded-full"></div>
-        Kendala ({{ items.length }})
+        Kendala <span v-if="items.length > 1">({{ items.length }})</span>
       </Badge>
       <div
         v-for="k in items"
