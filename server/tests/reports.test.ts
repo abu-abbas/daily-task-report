@@ -203,4 +203,29 @@ describe("GET /api/reports/monthly-preview", () => {
     expect(body.tanggalKosong).not.toContain(`${BULAN}-10`); // izin, bukan kosong
     expect(body.tanggalKosong).not.toContain(TANGGAL_MASA_DEPAN); // setelah hariIni
   });
+
+  test("timesheet: task+nomor benar, hari sebulan penuh dengan isIzin benar, taskDatesWorked cocok", async () => {
+    const res = await handleMonthlyReportPreview(
+      req(`/api/reports/monthly-preview?bulan=${BULAN}`, tenagaToken),
+      HARI_INI_PREVIEW,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      timesheet: {
+        tasks: { no: number; taskId: number; label: string }[];
+        hari: { tanggal: string; isWorkday: boolean; isIzin: boolean }[];
+        taskDatesWorked: Record<string, string[]>;
+      };
+    };
+    expect(body.timesheet.tasks).toHaveLength(1);
+    expect(body.timesheet.tasks[0]!.no).toBe(1);
+    expect(body.timesheet.tasks[0]!.label).toBe("feat(reports): Task Reports");
+    expect(body.timesheet.hari).toHaveLength(31); // Maret 2026
+
+    const hariIzin = body.timesheet.hari.find((h) => h.tanggal === `${BULAN}-10`)!;
+    expect(hariIzin.isIzin).toBe(true);
+
+    const taskId = body.timesheet.tasks[0]!.taskId;
+    expect(body.timesheet.taskDatesWorked[String(taskId)]).toContain(`${BULAN}-05`);
+  });
 });

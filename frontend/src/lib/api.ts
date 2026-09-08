@@ -385,11 +385,29 @@ export interface ReportPreviewItem {
   status: string;
   lampiranCount: number;
 }
+// Data timesheet (task x hari) buat tab pratinjau Gantt di layar — bentuknya sama dengan yang
+// dipakai buildMonthlyReportPdf di server, cuma taskDatesWorked jadi object (bukan Map/Set, JSON).
+export interface ReportPreviewTask {
+  taskId: number;
+  no: number;
+  label: string;
+}
+export interface ReportPreviewHari {
+  tanggal: string;
+  isWorkday: boolean;
+  isIzin: boolean;
+}
+export interface ReportPreviewTimesheet {
+  tasks: ReportPreviewTask[];
+  hari: ReportPreviewHari[];
+  taskDatesWorked: Record<string, string[]>;
+}
 export interface ReportPreview {
   bulan: string;
   bulanLabel: string;
   items: ReportPreviewItem[];
   tanggalKosong: string[];
+  timesheet: ReportPreviewTimesheet;
 }
 export const fetchMonthlyReportPreview = (bulan: string) =>
   api<ReportPreview>(`/reports/monthly-preview?bulan=${bulan}`);

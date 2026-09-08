@@ -228,5 +228,16 @@ export async function handleMonthlyReportPreview(req: Request, hariIniOverride?:
     .filter((h) => h.isWorkday && !h.isIzin && h.tanggal <= hariIni && !tanggalAdaRealisasi.has(h.tanggal))
     .map((h) => h.tanggal);
 
-  return json({ bulan, bulanLabel: agg.bulanLabel, items, tanggalKosong });
+  // Data timesheet (task x hari) buat pratinjau layar juga — bentuknya sama dengan yang dipakai
+  // buildMonthlyReportPdf, cuma taskDatesWorked diubah dari Map/Set (tidak bisa di-JSON) jadi
+  // object biasa keyed by taskId.
+  const timesheet = {
+    tasks: agg.tasks,
+    hari: agg.hari,
+    taskDatesWorked: Object.fromEntries(
+      [...agg.taskDatesWorked.entries()].map(([taskId, dates]) => [String(taskId), [...dates]]),
+    ),
+  };
+
+  return json({ bulan, bulanLabel: agg.bulanLabel, items, tanggalKosong, timesheet });
 }

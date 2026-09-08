@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
+import TimesheetPreview from "@/components/reports/TimesheetPreview.vue";
 import { LOCALE } from "@/lib/locale";
 import { monthlyReportPdfUrl } from "@/lib/api";
 import { useMonthlyReportPreviewQuery } from "@/composables/useReports";
@@ -189,44 +192,58 @@ function tanggalKosongLabel(tanggal: string): string {
           </p>
         </div>
 
-        <div class="overflow-x-auto rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>No</TableHead>
-                <TableHead>Tanggal</TableHead>
-                <TableHead>Aplikasi/Modul</TableHead>
-                <TableHead>Kegiatan</TableHead>
-                <TableHead>Catatan</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Lampiran</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableEmpty v-if="preview.items.length === 0" :colspan="7">
-                Belum ada realisasi di {{ preview.bulanLabel }}.
-              </TableEmpty>
-              <TableRow v-for="(item, i) in preview.items" :key="i">
-                <TableCell>{{ item.no }}</TableCell>
-                <TableCell class="whitespace-nowrap">{{ item.tanggalLabel }}</TableCell>
-                <TableCell>{{ item.projectNama }}</TableCell>
-                <TableCell>{{ item.kegiatan }}</TableCell>
-                <TableCell class="min-w-48">
-                  <MiniMarkdownText v-if="item.catatan" :text="item.catatan" class="text-xs" />
-                </TableCell>
-                <TableCell>
-                  <Badge :variant="item.status === 'Selesai' ? 'secondary' : 'outline'">{{ item.status }}</Badge>
-                </TableCell>
-                <TableCell>
-                  <span v-if="item.lampiranCount > 0" class="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <Paperclip class="size-3" />
-                    {{ item.lampiranCount }}
-                  </span>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
+        <Tabs default-value="daftar">
+          <TabsList>
+            <TabsTrigger value="daftar">Daftar</TabsTrigger>
+            <TabsTrigger value="timesheet">Timesheet</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="daftar">
+            <ScrollArea class="w-full min-w-0 rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>No</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Aplikasi/Modul</TableHead>
+                    <TableHead>Kegiatan</TableHead>
+                    <TableHead>Catatan</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Lampiran</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableEmpty v-if="preview.items.length === 0" :colspan="7">
+                    Belum ada realisasi di {{ preview.bulanLabel }}.
+                  </TableEmpty>
+                  <TableRow v-for="(item, i) in preview.items" :key="i">
+                    <TableCell>{{ item.no }}</TableCell>
+                    <TableCell class="whitespace-nowrap">{{ item.tanggalLabel }}</TableCell>
+                    <TableCell>{{ item.projectNama }}</TableCell>
+                    <TableCell class="whitespace-nowrap">{{ item.kegiatan }}</TableCell>
+                    <TableCell class="min-w-48">
+                      <MiniMarkdownText v-if="item.catatan" :text="item.catatan" class="text-xs" />
+                    </TableCell>
+                    <TableCell>
+                      <Badge :variant="item.status === 'Selesai' ? 'secondary' : 'outline'">{{ item.status }}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span v-if="item.lampiranCount > 0" class="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Paperclip class="size-3" />
+                        {{ item.lampiranCount }}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="timesheet">
+            <TimesheetPreview :timesheet="preview.timesheet" />
+          </TabsContent>
+        </Tabs>
       </template>
     </template>
   </div>
