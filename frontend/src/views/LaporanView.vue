@@ -75,6 +75,21 @@ const preview = computed(() => previewQuery.data.value);
 function tanggalKosongLabel(tanggal: string): string {
   return String(Number(tanggal.slice(8, 10)));
 }
+
+// Pratinjau ini merepresentasikan isi PDF (catatanToLines di report-pdf.ts menyederhanakan
+// checklist jadi bullet polos, status tercentang/belum tidak berarti apa-apa di dokumen cetak)
+// — checkbox interaktif punya MiniMarkdownText SENGAJA tidak dipakai di sini biar pratinjau tidak
+// menyesatkan (kelihatan bisa dicentang padahal di PDF nanti cuma jadi "•" biasa).
+const CHECKBOX_RE = /^- \[([ xX])\] (.*)$/;
+function catatanUntukPratinjau(catatan: string): string {
+  return catatan
+    .split("\n")
+    .map((line) => {
+      const checkbox = line.match(CHECKBOX_RE);
+      return checkbox ? `- ${checkbox[2]}` : line;
+    })
+    .join("\n");
+}
 </script>
 
 <template>
@@ -222,7 +237,7 @@ function tanggalKosongLabel(tanggal: string): string {
                     <TableCell>{{ item.projectNama }}</TableCell>
                     <TableCell class="whitespace-nowrap">{{ item.kegiatan }}</TableCell>
                     <TableCell class="min-w-48">
-                      <MiniMarkdownText v-if="item.catatan" :text="item.catatan" class="text-xs" />
+                      <MiniMarkdownText v-if="item.catatan" :text="catatanUntukPratinjau(item.catatan)" class="text-xs" />
                     </TableCell>
                     <TableCell>
                       <Badge :variant="item.status === 'Selesai' ? 'secondary' : 'outline'">{{ item.status }}</Badge>
