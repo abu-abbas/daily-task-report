@@ -4,6 +4,7 @@ import { errorResponse, json } from "../http";
 import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import { dalamBulanBerjalan, previousWorkday, realisasiTanggalDiizinkan, todayJakarta } from "../kalender";
 import { isActiveProjectMember } from "./projects";
+import { deleteAttachmentsByTaskLogIds } from "./attachments";
 
 interface ChecklistRow {
   taskId: number;
@@ -30,6 +31,36 @@ function kendalaByTaskLogId(taskLogIds: number[]): Map<number, KendalaPublic[]> 
   const rows = db
     .query<{ id: number; taskLogId: number; deskripsi: string; status: "open" | "resolved" }, number[]>(
       `SELECT id, task_log_id AS taskLogId, deskripsi, status FROM kendala WHERE task_log_id IN (${placeholders})`,
+    )
+    .all(...taskLogIds);
+  for (const row of rows) {
+    const list = map.get(row.taskLogId) ?? [];
+    list.push(row);
+    map.set(row.taskLogId, list);
+  }
+  return map;
+}
+
+interface AttachmentPublic {
+  id: number;
+  namaAsli: string;
+  fileType: string | null;
+  uploadedAt: string;
+}
+
+// Attachment cuma untuk log realisasi (ADR-0016) — pola sama kendalaByTaskLogId, sekali jalan
+// per taskLogId yang relevan, bukan N+1.
+function attachmentsByTaskLogId(taskLogIds: number[]): Map<number, AttachmentPublic[]> {
+  const map = new Map<number, AttachmentPublic[]>();
+  if (taskLogIds.length === 0) return map;
+  const placeholders = taskLogIds.map(() => "?").join(",");
+  const rows = db
+    .query<
+      { id: number; taskLogId: number; namaAsli: string; fileType: string | null; uploadedAt: string },
+      number[]
+    >(
+      `SELECT id, attachable_id AS taskLogId, nama_asli AS namaAsli, file_type AS fileType, uploaded_at AS uploadedAt
+       FROM attachments WHERE attachable_type = 'task_log' AND attachable_id IN (${placeholders})`,
     )
     .all(...taskLogIds);
   for (const row of rows) {
@@ -105,13 +136,15 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
     )
     .all(ctx.user.id, hariKerjaSebelumnya);
 
-  // Kendala cuma untuk log realisasi (ADR-0015): checklist yang sudah pernah direalisasi +
-  // kerjaan tambahan hari ini, diambil sekali jalan lalu ditempel per taskLogId.
+  // Kendala + attachment cuma untuk log realisasi (ADR-0015/ADR-0016): checklist yang sudah
+  // pernah direalisasi + kerjaan tambahan hari ini, diambil sekali jalan lalu ditempel per
+  // taskLogId.
   const relevantTaskLogIds = [
     ...realisasiRows.filter((r) => r.isExtra === 0).map((r) => r.id),
     ...tambahan.map((r) => r.taskLogId),
   ];
   const kendalaMap = kendalaByTaskLogId(relevantTaskLogIds);
+  const attachmentMap = attachmentsByTaskLogId(relevantTaskLogIds);
 
   const checklist = checklistRows.map((r) => {
     const realisasi = realisasiByTask.get(r.taskId);
@@ -120,10 +153,15 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
       realisasiCatatan: realisasi?.catatan ?? null,
       taskLogId: realisasi?.taskLogId ?? null,
       kendala: realisasi ? (kendalaMap.get(realisasi.taskLogId) ?? []) : [],
+      attachments: realisasi ? (attachmentMap.get(realisasi.taskLogId) ?? []) : [],
     };
   });
 
-  const tambahanWithKendala = tambahan.map((r) => ({ ...r, kendala: kendalaMap.get(r.taskLogId) ?? [] }));
+  const tambahanFinal = tambahan.map((r) => ({
+    ...r,
+    kendala: kendalaMap.get(r.taskLogId) ?? [],
+    attachments: attachmentMap.get(r.taskLogId) ?? [],
+  }));
 
   const rencanaHariIni = db
     .query<ChecklistRow & { catatan: string | null }, [number, string]>(
@@ -147,7 +185,7 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
     hariIni,
     hariKerjaSebelumnya,
     checklist,
-    tambahan: tambahanWithKendala,
+    tambahan: tambahanFinal,
     rencanaHariIni,
     izin: izin ?? null,
   });
@@ -326,6 +364,15 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
     for (const item of parsed.data.items) saveItem(item);
     if (uncheckedTaskIds.length > 0) {
       const placeholders = uncheckedTaskIds.map(() => "?").join(",");
+      // Attachment polymorphic TIDAK auto-cascade seperti kendala (bukan FK sungguhan) — ambil
+      // id task_log yang mau dihapus DULU, bersihkan attachment-nya (baris DB + file disk)
+      // SEBELUM baris task_logs-nya sendiri dihapus, supaya tidak jadi file/baris yatim.
+      const rowsToDelete = db
+        .query<{ id: number }, [number, string, ...number[]]>(
+          `SELECT id FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'realisasi' AND is_extra = 0 AND task_id IN (${placeholders})`,
+        )
+        .all(ctx!.user.id, hariKerjaSebelumnya, ...uncheckedTaskIds);
+      deleteAttachmentsByTaskLogIds(rowsToDelete.map((r) => r.id));
       db.query(
         `DELETE FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'realisasi' AND is_extra = 0 AND task_id IN (${placeholders})`,
       ).run(ctx!.user.id, hariKerjaSebelumnya, ...uncheckedTaskIds);

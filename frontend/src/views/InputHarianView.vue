@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import TaskPickerForm from "@/components/input-harian/TaskPickerForm.vue";
 import KendalaList from "@/components/input-harian/KendalaList.vue";
+import AttachmentList from "@/components/input-harian/AttachmentList.vue";
 import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
 import MiniMarkdownEditor from "@/components/input-harian/MiniMarkdownEditor.vue";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
@@ -284,17 +285,21 @@ const rencanaTersimpanAkanDihapus = computed(() =>
 );
 
 // Efek uncheck checklist realisasi (ADR-0044) menghapus baris realisasi tersimpan — dan karena
-// kendala menempel ke baris itu (ON DELETE CASCADE, ADR-0015), ikut terhapus diam-diam kalau
-// tidak diperingatkan dulu di sini.
-const checklistKendalaAkanHilang = computed(() =>
+// kendala (FK CASCADE, ADR-0015) dan attachment (dibersihkan manual, ADR-0016 — polymorphic,
+// bukan FK sungguhan) menempel ke baris itu, ikut terhapus diam-diam kalau tidak diperingatkan
+// dulu di sini.
+const checklistDataAkanHilang = computed(() =>
   (data.value?.checklist ?? []).filter((item) => {
     const draft = checklistDrafts.value[item.taskId];
     const akanDiuncheck = item.realisasiCatatan !== null && !draft?.checked;
-    return akanDiuncheck && item.kendala.length > 0;
+    return akanDiuncheck && (item.kendala.length > 0 || item.attachments.length > 0);
   }),
 );
 const totalKendalaAkanHilang = computed(() =>
-  checklistKendalaAkanHilang.value.reduce((total, item) => total + item.kendala.length, 0),
+  checklistDataAkanHilang.value.reduce((total, item) => total + item.kendala.length, 0),
+);
+const totalAttachmentAkanHilang = computed(() =>
+  checklistDataAkanHilang.value.reduce((total, item) => total + item.attachments.length, 0),
 );
 </script>
 
@@ -385,6 +390,11 @@ const totalKendalaAkanHilang = computed(() =>
                   :task-log-id="item.taskLogId"
                   :items="item.kendala"
                 />
+                <AttachmentList
+                  v-if="checklistDrafts[item.taskId]?.checked"
+                  :task-log-id="item.taskLogId"
+                  :items="item.attachments"
+                />
               </div>
             </div>
           </div>
@@ -392,7 +402,7 @@ const totalKendalaAkanHilang = computed(() =>
           <Separator />
 
           <div class="grid gap-3">
-            <h3 class="text-sm font-medium">Kerjaan tambahan</h3>
+            <h3 class="text-sm font-medium">Kerjaan diluar rencana</h3>
 
             <div v-if="data.tambahan.length > 0" class="grid gap-2">
               <div v-for="group in tambahanGroups" :key="group.projectId" class="grid gap-2 rounded-md border p-3 text-sm">
@@ -414,6 +424,7 @@ const totalKendalaAkanHilang = computed(() =>
                   </div>
                   <MiniMarkdownText :text="t.catatan ?? ''" class="text-xs text-muted-foreground" />
                   <KendalaList :task-log-id="t.taskLogId" :items="t.kendala" />
+                  <AttachmentList :task-log-id="t.taskLogId" :items="t.attachments" />
                 </div>
               </div>
             </div>
@@ -432,12 +443,12 @@ const totalKendalaAkanHilang = computed(() =>
               <DialogTrigger as-child>
                 <Button type="button" size="sm" variant="outline" class="justify-self-start">
                   <Plus class="mr-1 size-4" />
-                  Tambah kerjaan tambahan
+                  Tambah kerjaan
                 </Button>
               </DialogTrigger>
               <DialogContent class="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Tambah kerjaan tambahan</DialogTitle>
+                  <DialogTitle>Tambah kerjaan</DialogTitle>
                 </DialogHeader>
                 <TaskPickerForm
                   require-catatan
@@ -539,7 +550,7 @@ const totalKendalaAkanHilang = computed(() =>
           <AlertDialogHeader>
             <AlertDialogTitle>Simpan input harian ini?</AlertDialogTitle>
             <AlertDialogDescription>
-              {{ ringkasan.realisasi }} realisasi dicentang, {{ ringkasan.tambahan }} kerjaan tambahan baru,
+              {{ ringkasan.realisasi }} realisasi dicentang, {{ ringkasan.tambahan }} kerjaan diluar rencana baru,
               {{ ringkasan.rencana }} rencana baru hari ini<span v-if="izinAktif">, ditambah status izin</span>
               akan disimpan. Item yang sudah tersimpan sebelumnya tidak dihitung ulang di sini.
             </AlertDialogDescription>
@@ -547,10 +558,12 @@ const totalKendalaAkanHilang = computed(() =>
               {{ rencanaTersimpanAkanDihapus }} rencana yang sudah tersimpan di tanggal ini akan terhapus karena izin
               diaktifkan.
             </p>
-            <p v-if="checklistKendalaAkanHilang.length > 0" class="text-sm text-destructive">
-              {{ checklistKendalaAkanHilang.length }} checklist yang di-uncheck sudah punya
-              {{ totalKendalaAkanHilang }} kendala tercatat — realisasi dan kendalanya akan ikut terhapus kalau
-              disimpan.
+            <p v-if="checklistDataAkanHilang.length > 0" class="text-sm text-destructive">
+              {{ checklistDataAkanHilang.length }} checklist yang di-uncheck sudah punya
+              <template v-if="totalKendalaAkanHilang > 0">{{ totalKendalaAkanHilang }} kendala</template>
+              <template v-if="totalKendalaAkanHilang > 0 && totalAttachmentAkanHilang > 0"> dan </template>
+              <template v-if="totalAttachmentAkanHilang > 0">{{ totalAttachmentAkanHilang }} lampiran</template>
+              tercatat — realisasi beserta itu semua akan ikut terhapus kalau disimpan.
             </p>
           </AlertDialogHeader>
           <AlertDialogFooter>

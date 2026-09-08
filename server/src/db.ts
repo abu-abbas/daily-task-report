@@ -11,6 +11,10 @@ const schemaDir = join(serverRoot, "..", "docs", "schema");
 mkdirSync(dataDir, { recursive: true });
 
 const dbPath = process.env.DATABASE_PATH ?? join(dataDir, "app.db");
+// Basis penyimpanan attachment (server/src/storage.ts) — diturunkan dari dbPath, bukan dataDir,
+// supaya test yang override DATABASE_PATH ke tmpdir otomatis mengisolasi file attachment juga,
+// konsisten dengan pola isolasi test sqlite yang sudah ada, tanpa perlu env var baru.
+export const storageDir = dirname(dbPath);
 
 export const db = new Database(dbPath, { create: true });
 db.run("PRAGMA foreign_keys = ON;");

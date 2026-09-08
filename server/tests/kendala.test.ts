@@ -83,30 +83,30 @@ beforeAll(async () => {
   rencanaLogId = Number(rencanaResult.lastInsertRowid);
 });
 
-describe("POST /api/kendala", () => {
+describe("POST /api/bottlenecks", () => {
   test("ditolak tanpa login", async () => {
-    const res = await handleCreateKendala(req("POST", "/api/kendala", undefined, { taskLogId: realisasiLogId, deskripsi: "Blocked" }));
+    const res = await handleCreateKendala(req("POST", "/api/bottlenecks", undefined, { taskLogId: realisasiLogId, deskripsi: "Blocked" }));
     expect(res.status).toBe(401);
   });
 
   test("ditolak (404) task_log tidak ada", async () => {
-    const res = await handleCreateKendala(req("POST", "/api/kendala", tenagaToken, { taskLogId: 999999, deskripsi: "Blocked" }));
+    const res = await handleCreateKendala(req("POST", "/api/bottlenecks", tenagaToken, { taskLogId: 999999, deskripsi: "Blocked" }));
     expect(res.status).toBe(404);
   });
 
   test("ditolak (403) bukan pemilik log", async () => {
-    const res = await handleCreateKendala(req("POST", "/api/kendala", luarToken, { taskLogId: realisasiLogId, deskripsi: "Blocked" }));
+    const res = await handleCreateKendala(req("POST", "/api/bottlenecks", luarToken, { taskLogId: realisasiLogId, deskripsi: "Blocked" }));
     expect(res.status).toBe(403);
   });
 
   test("ditolak (400) log jenis rencana", async () => {
-    const res = await handleCreateKendala(req("POST", "/api/kendala", tenagaToken, { taskLogId: rencanaLogId, deskripsi: "Blocked" }));
+    const res = await handleCreateKendala(req("POST", "/api/bottlenecks", tenagaToken, { taskLogId: rencanaLogId, deskripsi: "Blocked" }));
     expect(res.status).toBe(400);
   });
 
   test("berhasil menambah kendala ke log realisasi milik sendiri", async () => {
     const res = await handleCreateKendala(
-      req("POST", "/api/kendala", tenagaToken, { taskLogId: realisasiLogId, deskripsi: "Menunggu akses server" }),
+      req("POST", "/api/bottlenecks", tenagaToken, { taskLogId: realisasiLogId, deskripsi: "Menunggu akses server" }),
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as { kendala: { id: number; taskLogId: number; deskripsi: string; status: string } };
@@ -116,59 +116,59 @@ describe("POST /api/kendala", () => {
   });
 });
 
-describe("POST /api/kendala/:id/resolve dan DELETE /api/kendala/:id", () => {
+describe("POST /api/bottlenecks/:id/resolve dan DELETE /api/bottlenecks/:id", () => {
   let kendalaId: number;
 
   beforeAll(async () => {
     const res = await handleCreateKendala(
-      req("POST", "/api/kendala", tenagaToken, { taskLogId: realisasiLogId, deskripsi: "Nunggu approval" }),
+      req("POST", "/api/bottlenecks", tenagaToken, { taskLogId: realisasiLogId, deskripsi: "Nunggu approval" }),
     );
     kendalaId = ((await res.json()) as { kendala: { id: number } }).kendala.id;
   });
 
   test("resolve ditolak tanpa login", async () => {
-    const res = await handleResolveKendala(req("POST", `/api/kendala/${kendalaId}/resolve`), kendalaId);
+    const res = await handleResolveKendala(req("POST", `/api/bottlenecks/${kendalaId}/resolve`), kendalaId);
     expect(res.status).toBe(401);
   });
 
   test("resolve ditolak (404) kendala tidak ada", async () => {
-    const res = await handleResolveKendala(req("POST", "/api/kendala/999999/resolve", tenagaToken), 999999);
+    const res = await handleResolveKendala(req("POST", "/api/bottlenecks/999999/resolve", tenagaToken), 999999);
     expect(res.status).toBe(404);
   });
 
   test("resolve ditolak (403) bukan pembuat log", async () => {
-    const res = await handleResolveKendala(req("POST", `/api/kendala/${kendalaId}/resolve`, luarToken), kendalaId);
+    const res = await handleResolveKendala(req("POST", `/api/bottlenecks/${kendalaId}/resolve`, luarToken), kendalaId);
     expect(res.status).toBe(403);
   });
 
   test("resolve tetap berhasil walau tanggal log sudah di luar bulan berjalan (boleh kapan saja, ADR-0015)", async () => {
     // realisasiLogId bertanggal 2026-09-07 — tanggal "hari ini" asli saat test dijalankan
     // pasti sudah lewat itu, jadi ini sudah membuktikan resolve tidak terikat bulan berjalan.
-    const res = await handleResolveKendala(req("POST", `/api/kendala/${kendalaId}/resolve`, tenagaToken), kendalaId);
+    const res = await handleResolveKendala(req("POST", `/api/bottlenecks/${kendalaId}/resolve`, tenagaToken), kendalaId);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { kendala: { status: string } };
     expect(body.kendala.status).toBe("resolved");
   });
 
   test("resolve ulang ditolak (409), satu arah tidak ada reopen", async () => {
-    const res = await handleResolveKendala(req("POST", `/api/kendala/${kendalaId}/resolve`, tenagaToken), kendalaId);
+    const res = await handleResolveKendala(req("POST", `/api/bottlenecks/${kendalaId}/resolve`, tenagaToken), kendalaId);
     expect(res.status).toBe(409);
   });
 
   test("delete ditolak (403) bukan pembuat log", async () => {
-    const res = await handleDeleteKendala(req("DELETE", `/api/kendala/${kendalaId}`, luarToken), kendalaId);
+    const res = await handleDeleteKendala(req("DELETE", `/api/bottlenecks/${kendalaId}`, luarToken), kendalaId);
     expect(res.status).toBe(403);
   });
 
   test("delete berhasil (204) dan hilang dari tabel", async () => {
-    const res = await handleDeleteKendala(req("DELETE", `/api/kendala/${kendalaId}`, tenagaToken), kendalaId);
+    const res = await handleDeleteKendala(req("DELETE", `/api/bottlenecks/${kendalaId}`, tenagaToken), kendalaId);
     expect(res.status).toBe(204);
     const row = db.query("SELECT id FROM kendala WHERE id = ?").get(kendalaId);
     expect(row).toBeNull();
   });
 
   test("delete ditolak (404) kendala tidak ada", async () => {
-    const res = await handleDeleteKendala(req("DELETE", `/api/kendala/${kendalaId}`, tenagaToken), kendalaId);
+    const res = await handleDeleteKendala(req("DELETE", `/api/bottlenecks/${kendalaId}`, tenagaToken), kendalaId);
     expect(res.status).toBe(404);
   });
 });

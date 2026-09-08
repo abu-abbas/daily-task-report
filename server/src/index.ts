@@ -16,6 +16,7 @@ import { handleCloseTask, handleCreateTask, handleListTasks } from "./routes/tas
 import { handleGetDailyInput, handleSaveDailyInput } from "./routes/task-logs";
 import { handleCancelLeave, handleSaveLeave } from "./routes/leaves";
 import { handleCreateKendala, handleDeleteKendala, handleResolveKendala } from "./routes/kendala";
+import { handleDeleteAttachment, handleGetAttachmentFile, handleUploadAttachment } from "./routes/attachments";
 
 runMigrations();
 
@@ -52,9 +53,12 @@ Bun.serve({
     "/api/task-logs": { POST: (req) => handleSaveDailyInput(req) },
     "/api/leaves": { POST: (req) => handleSaveLeave(req) },
     "/api/leaves/:tanggal": { DELETE: (req) => handleCancelLeave(req, req.params.tanggal) },
-    "/api/kendala": { POST: (req) => handleCreateKendala(req) },
-    "/api/kendala/:id": { DELETE: (req) => handleDeleteKendala(req, Number(req.params.id)) },
-    "/api/kendala/:id/resolve": { POST: (req) => handleResolveKendala(req, Number(req.params.id)) },
+    "/api/bottlenecks": { POST: (req) => handleCreateKendala(req) },
+    "/api/bottlenecks/:id": { DELETE: (req) => handleDeleteKendala(req, Number(req.params.id)) },
+    "/api/bottlenecks/:id/resolve": { POST: (req) => handleResolveKendala(req, Number(req.params.id)) },
+    "/api/attachments": { POST: (req) => handleUploadAttachment(req) },
+    "/api/attachments/:id": { DELETE: (req) => handleDeleteAttachment(req, Number(req.params.id)) },
+    "/api/attachments/:id/file": { GET: (req) => handleGetAttachmentFile(req, Number(req.params.id)) },
   },
   fetch() {
     return new Response("Not found", { status: 404 });

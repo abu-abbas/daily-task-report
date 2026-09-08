@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import {
   cancelLeave,
   createKendala,
+  deleteAttachment,
   deleteKendala,
   fetchDailyInput,
   resolveKendala,
   saveDailyInput,
   saveLeave,
+  uploadAttachment,
   type IzinJenis,
   type SaveTaskLogItem,
 } from "@/lib/api";
@@ -72,6 +74,22 @@ export function useResolveKendala() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => resolveKendala(id),
+    onSuccess: () => invalidateDailyInput(queryClient),
+  });
+}
+
+export function useUploadAttachment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskLogId, file }: { taskLogId: number; file: File }) => uploadAttachment(taskLogId, file),
+    onSuccess: () => invalidateDailyInput(queryClient),
+  });
+}
+
+export function useDeleteAttachment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteAttachment(id),
     onSuccess: () => invalidateDailyInput(queryClient),
   });
 }

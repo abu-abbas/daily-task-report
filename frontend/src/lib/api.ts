@@ -173,6 +173,13 @@ export interface KendalaItem {
   status: "open" | "resolved";
 }
 
+export interface AttachmentItem {
+  id: number;
+  namaAsli: string;
+  fileType: string | null;
+  uploadedAt: string;
+}
+
 export interface ChecklistItem {
   taskId: number;
   deskripsi: string;
@@ -184,6 +191,7 @@ export interface ChecklistItem {
   realisasiCatatan: string | null;
   taskLogId: number | null;
   kendala: KendalaItem[];
+  attachments: AttachmentItem[];
 }
 
 export interface TambahanItem {
@@ -196,6 +204,7 @@ export interface TambahanItem {
   projectId: number;
   projectNama: string;
   kendala: KendalaItem[];
+  attachments: AttachmentItem[];
 }
 
 export interface RencanaHariIniItem {
@@ -270,12 +279,30 @@ export const cancelLeave = (tanggal: string) =>
 // ADR-0015: kendala cuma untuk log realisasi yang sudah tersimpan, endpoint berdiri sendiri
 // (bukan bagian dari saveDailyInput) — aksi kecil independen, sama seperti closeTask/saveLeave.
 export const createKendala = (taskLogId: number, deskripsi: string) =>
-  api<{ kendala: KendalaItem }>("/kendala", {
+  api<{ kendala: KendalaItem }>("/bottlenecks", {
     method: "POST",
     body: JSON.stringify({ taskLogId, deskripsi }),
   });
 
-export const deleteKendala = (id: number) => api<void>(`/kendala/${id}`, { method: "DELETE" });
+export const deleteKendala = (id: number) => api<void>(`/bottlenecks/${id}`, { method: "DELETE" });
 
 export const resolveKendala = (id: number) =>
-  api<{ kendala: KendalaItem }>(`/kendala/${id}/resolve`, { method: "POST" });
+  api<{ kendala: KendalaItem }>(`/bottlenecks/${id}/resolve`, { method: "POST" });
+
+// ADR-0016: lampiran cuma untuk log realisasi yang sudah tersimpan, sama scope kendala. Upload
+// pakai FormData — TIDAK lewat helper api() di atas karena itu selalu paksa
+// Content-Type: application/json, tidak cocok untuk multipart.
+export async function uploadAttachment(taskLogId: number, file: File): Promise<{ attachment: AttachmentItem }> {
+  const form = new FormData();
+  form.set("taskLogId", String(taskLogId));
+  form.set("file", file);
+  const res = await fetch("/api/attachments", { method: "POST", credentials: "same-origin", body: form });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(body?.error ?? "Terjadi kesalahan.", res.status);
+  return body;
+}
+
+export const deleteAttachment = (id: number) => api<void>(`/attachments/${id}`, { method: "DELETE" });
+
+// Dipakai langsung sebagai src/href — cookie sesi ikut otomatis (same-origin).
+export const attachmentFileUrl = (id: number) => `/api/attachments/${id}/file`;
