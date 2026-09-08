@@ -98,9 +98,32 @@ const detailRencana = computed(() =>
         <p class="text-sm text-muted-foreground">Aktivitas realisasi 12 bulan terakhir.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <Popover :open="laporanPopoverOpen" @update:open="tutupLaporanPopover">
+        <Select v-model="projectFilter">
+          <SelectTrigger class="w-full sm:w-56">
+            <SelectValue placeholder="Semua project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua project</SelectItem>
+            <SelectItem v-for="p in projects" :key="p.id" :value="String(p.id)">{{ p.nama }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+
+    <p v-if="heatmapQuery.isPending.value" class="text-sm text-muted-foreground">Memuat...</p>
+    <p v-else-if="heatmapQuery.isError.value" class="text-sm text-destructive">Gagal memuat, coba muat ulang.</p>
+    <ActivityHeatmap
+      v-else-if="heatmapQuery.data.value"
+      :hari="heatmapQuery.data.value.hari"
+      :dari="heatmapQuery.data.value.dari"
+      :sampai="heatmapQuery.data.value.sampai"
+      @select-tanggal="pilihTanggalHeatmap"
+    />
+
+    <div class="flex items-center gap-2">
+      <Popover :open="laporanPopoverOpen" @update:open="tutupLaporanPopover">
           <PopoverTrigger as-child>
-            <Button variant="outline" size="sm">
+            <Button>
               <FileDown class="size-4" />
               Unduh laporan (PDF)
             </Button>
@@ -151,27 +174,7 @@ const detailRencana = computed(() =>
             </div>
           </PopoverContent>
         </Popover>
-        <Select v-model="projectFilter">
-          <SelectTrigger class="w-full sm:w-56">
-            <SelectValue placeholder="Semua project" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua project</SelectItem>
-            <SelectItem v-for="p in projects" :key="p.id" :value="String(p.id)">{{ p.nama }}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
     </div>
-
-    <p v-if="heatmapQuery.isPending.value" class="text-sm text-muted-foreground">Memuat...</p>
-    <p v-else-if="heatmapQuery.isError.value" class="text-sm text-destructive">Gagal memuat, coba muat ulang.</p>
-    <ActivityHeatmap
-      v-else-if="heatmapQuery.data.value"
-      :hari="heatmapQuery.data.value.hari"
-      :dari="heatmapQuery.data.value.dari"
-      :sampai="heatmapQuery.data.value.sampai"
-      @select-tanggal="pilihTanggalHeatmap"
-    />
 
     <ActivityLogList
       :project-id="projectIdFilter"
