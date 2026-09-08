@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { toast } from "vue-sonner";
+import { CircleCheck, Trash2 } from "@lucide/vue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ApiError, type KendalaItem } from "@/lib/api";
 import { useCreateKendala, useDeleteKendala, useResolveKendala } from "@/composables/useTaskLogs";
 
@@ -60,6 +62,7 @@ function batalTambah() {
       v-for="k in items"
       :key="k.id"
       class="flex items-start justify-between gap-2 rounded-md border border-dashed p-2 text-xs"
+      :class="k.status === 'open' && 'bg-destructive/10'"
     >
       <span class="flex items-start gap-1.5">
         <Badge :variant="k.status === 'resolved' ? 'secondary' : 'outline'" class="shrink-0">
@@ -67,20 +70,37 @@ function batalTambah() {
         </Badge>
         <span>{{ k.deskripsi }}</span>
       </span>
-      <div class="flex shrink-0 gap-1">
-        <Button
-          v-if="k.status === 'open'"
-          type="button"
-          variant="ghost"
-          size="sm"
-          :disabled="resolveMutation.isPending.value"
-          @click="resolve(k.id)"
-        >
-          Tandai selesai
-        </Button>
-        <Button type="button" variant="ghost" size="sm" :disabled="deleteMutation.isPending.value" @click="remove(k.id)">
-          Hapus
-        </Button>
+      <div class="flex shrink-0 items-center gap-1">
+        <Tooltip v-if="k.status === 'open'">
+          <TooltipTrigger as-child>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Tandai selesai"
+              :disabled="resolveMutation.isPending.value"
+              @click="resolve(k.id)"
+            >
+              <CircleCheck class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Tandai selesai</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Hapus kendala"
+              :disabled="deleteMutation.isPending.value"
+              @click="remove(k.id)"
+            >
+              <Trash2 class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Hapus</TooltipContent>
+        </Tooltip>
       </div>
     </div>
 
