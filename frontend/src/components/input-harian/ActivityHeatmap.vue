@@ -113,7 +113,7 @@ watchEffect(() => {
               <button
                 type="button"
                 :data-tanggal="sel.tanggal"
-                class="size-3 rounded-[0.165rem] transition-colors hover:ring-1 hover:ring-ring"
+                class="size-4 rounded-[0.175rem] transition-colors hover:ring-1 hover:ring-ring"
                 :class="BUCKET_CLASS[bucket(sel.count)]"
                 @click="emit('select-tanggal', sel.tanggal)"
               />
@@ -125,7 +125,7 @@ watchEffect(() => {
               </div>
             </TooltipContent>
           </Tooltip>
-          <div v-else class="size-3" />
+          <div v-else class="size-4" />
         </template>
       </div>
     </div>
