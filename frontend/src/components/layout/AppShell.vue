@@ -39,7 +39,7 @@ const isAdminRoute = computed(() => String(route.name).startsWith("admin-"));
       </header>
 
       <ScrollArea id="main-content" tabindex="-1" class="min-h-0 min-w-0 flex-1 outline-none">
-        <div class="mx-auto flex min-w-0 max-w-3xl flex-col gap-4 p-5">
+        <div class="mx-auto flex min-w-0 max-w-4xl flex-col gap-4 p-5">
           <slot />
         </div>
       </ScrollArea>
