@@ -71,6 +71,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0043 | [Beranda sebagai preview rencana hari ini, todo-list opsional dalam catatan](adr/0043-beranda-dan-todo-list-rencana.md) |
 | 0044 | [Pilih tanggal laporan, edit data tersimpan, dan form izin](adr/0044-tanggal-laporan-dan-izin.md) |
 | 0045 | [Penutupan task eksplisit dengan deskripsi opsional](adr/0045-penutupan-task.md) |
+| 0046 | [Skema fisik untuk laporan bulanan PDF lengkap — digantikan ADR-0019](adr/0046-skema-fisik-laporan-template.md) |
 
 ## Tahapan pekerjaan
 

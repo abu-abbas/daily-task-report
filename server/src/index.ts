@@ -18,7 +18,13 @@ import { handleCancelLeave, handleSaveLeave } from "./routes/leaves";
 import { handleCreateKendala, handleDeleteKendala, handleResolveKendala } from "./routes/kendala";
 import { handleDeleteAttachment, handleGetAttachmentFile, handleUploadAttachment } from "./routes/attachments";
 import { handleGetActivityHeatmap, handleGetRiwayatDetail, handleListActivityLog } from "./routes/riwayat";
-import { handleMonthlyReportPdf, handleMonthlyReportPreview } from "./routes/reports";
+import { handleMonthlyReportPdf, handleMonthlyReportPreview, handleMonthlyReportWord } from "./routes/reports";
+import {
+  handleDeleteLaporanTemplate,
+  handleGetMyLaporanTemplate,
+  handleUploadLaporanTemplate,
+} from "./routes/laporan-template";
+import { handleGetSaran, handleSaveSaran } from "./routes/saran";
 
 runMigrations();
 
@@ -65,7 +71,14 @@ Bun.serve({
     "/api/activity-log": { GET: (req) => handleListActivityLog(req) },
     "/api/history/:tanggal": { GET: (req) => handleGetRiwayatDetail(req, req.params.tanggal) },
     "/api/reports/monthly": { GET: (req) => handleMonthlyReportPdf(req) },
+    "/api/reports/monthly-word": { GET: (req) => handleMonthlyReportWord(req) },
     "/api/reports/monthly-preview": { GET: (req) => handleMonthlyReportPreview(req) },
+    "/api/laporan-template": {
+      GET: handleGetMyLaporanTemplate,
+      POST: (req) => handleUploadLaporanTemplate(req),
+      DELETE: (req) => handleDeleteLaporanTemplate(req),
+    },
+    "/api/saran": { GET: handleGetSaran, PUT: (req) => handleSaveSaran(req) },
   },
   fetch() {
     return new Response("Not found", { status: 404 });

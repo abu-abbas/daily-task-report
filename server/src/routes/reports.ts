@@ -4,6 +4,9 @@ import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import { isWorkday, todayJakarta } from "../kalender";
 import { absoluteAttachmentPath } from "../storage";
 import { buildMonthlyReportPdf, catatanToLines, type ReportAktivitasRow, type ReportHari, type ReportLampiran, type ReportTask } from "../report-pdf";
+import { buildMonthlyReportDocx } from "../report-docx";
+import { getSaranLines } from "./saran";
+import { getLaporanTemplatePath } from "./laporan-template";
 
 const BULAN_RE = /^\d{4}-\d{2}$/;
 
@@ -11,6 +14,16 @@ const TANGGAL_LABEL_FMT = new Intl.DateTimeFormat("id-ID", { day: "numeric", mon
 function tanggalLabel(tanggal: string): string {
   const [y, m, d] = tanggal.split("-").map(Number);
   return TANGGAL_LABEL_FMT.format(new Date(Date.UTC(y, m - 1, d)));
+}
+
+const TANGGAL_PANJANG_FMT = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+// Nama bulan SAJA (tanpa tahun) — dipakai khusus {BULAN} di template Word, karena template
+// sudah punya {TA} (tahun) terpisah di kotak sendiri; kalau {BULAN} ikut bawa tahun juga,
+// tahunnya kelihatan dobel di cover (ditemukan lewat screenshot user, render nyata di MS Word).
+const BULAN_SAJA_FMT = new Intl.DateTimeFormat("id-ID", { month: "long", timeZone: "UTC" });
+function bulanSajaLabel(bulan: string): string {
+  const [tahun, bulanAngka] = bulan.split("-").map(Number);
+  return BULAN_SAJA_FMT.format(new Date(Date.UTC(tahun!, bulanAngka! - 1, 1)));
 }
 
 function daysInMonth(bulan: string): number {
@@ -127,20 +140,12 @@ async function aggregateMonthlyReport(userId: number, bulan: string): Promise<Ag
   return { bulanLabel, tasks, taskNoMap, taskDatesWorked, hari, rows, attachmentsByLog };
 }
 
-// Cicilan awal Stage 7 (ADR-0019) — laporan PDF generik satu layout, tanpa template Word (itu
-// masih menunggu Q-06). Cakupan diri-sendiri saja, sama seperti Riwayat.
-export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
-
-  const url = new URL(req.url);
-  const bulan = url.searchParams.get("bulan");
-  if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
-
-  const agg = await aggregateMonthlyReport(ctx.user.id, bulan);
-
-  // Penomoran lampiran global lintas dokumen, urut sesuai urutan baris aktifitas ditemukan.
+// Dipakai handleMonthlyReportPdf dan handleMonthlyReportWord — sama-sama butuh baris tabel
+// aktifitas + bytes lampiran dari agregasi yang sama, beda cuma cara merender jadi dokumen akhir.
+// Penomoran lampiran global lintas dokumen, urut sesuai urutan baris aktifitas ditemukan.
+async function buildLampiranDanAktivitas(
+  agg: AggregatedReport,
+): Promise<{ lampiran: ReportLampiran[]; aktivitas: ReportAktivitasRow[] }> {
   const lampiran: ReportLampiran[] = [];
   const aktivitas: ReportAktivitasRow[] = [];
   for (const r of agg.rows) {
@@ -171,6 +176,22 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
       lampiranNumbers,
     });
   }
+  return { lampiran, aktivitas };
+}
+
+// Cicilan awal Stage 7 (ADR-0019) — laporan PDF generik satu layout, tanpa template Word (itu
+// masih menunggu Q-06). Cakupan diri-sendiri saja, sama seperti Riwayat.
+export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
+  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
+  const ctx = getAuthContext(token);
+  if (!ctx) return errorResponse(401, "Belum login.");
+
+  const url = new URL(req.url);
+  const bulan = url.searchParams.get("bulan");
+  if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
+
+  const agg = await aggregateMonthlyReport(ctx.user.id, bulan);
+  const { lampiran, aktivitas } = await buildLampiranDanAktivitas(agg);
 
   const bytes = await buildMonthlyReportPdf({
     namaUser: ctx.user.nama,
@@ -191,6 +212,71 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="laporan-${slug(ctx.user.nama)}-${bulan}.pdf"`,
+    },
+  });
+}
+
+// ADR-0019 revisi (2026-09-11, disederhanakan lagi setelahnya): laporan diunduh sebagai Word
+// hasil mail-merge ke template MILIK TENAGA AHLI SENDIRI (routes/laporan-template.ts) — bukan
+// digambar dari nol seperti PDF. Cover/Pendahuluan/Ruang Lingkup/Penutup sudah statis di dalam
+// file template masing-masing orang; di sini cuma isi placeholder nama/timesheet/tabel
+// aktifitas/lampiran/saran. Tidak ada gate — saran kosong cukup dirender kosong.
+export async function handleMonthlyReportWord(req: Request): Promise<Response> {
+  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
+  const ctx = getAuthContext(token);
+  if (!ctx) return errorResponse(401, "Belum login.");
+
+  const url = new URL(req.url);
+  const bulan = url.searchParams.get("bulan");
+  if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
+
+  const templatePath = getLaporanTemplatePath(ctx.user.id);
+  if (!templatePath) {
+    return errorResponse(409, "Anda belum mengunggah template Word. Unggah dulu sebelum mengunduh laporan.");
+  }
+  const templateBytes = await Bun.file(templatePath)
+    .arrayBuffer()
+    .then((b) => new Uint8Array(b))
+    .catch(() => null);
+  if (!templateBytes) return errorResponse(404, "File template tidak ditemukan di disk.");
+
+  const agg = await aggregateMonthlyReport(ctx.user.id, bulan);
+  const { lampiran, aktivitas } = await buildLampiranDanAktivitas(agg);
+
+  const [tahun] = bulan.split("-");
+  const akhirBulan = `${bulan}-${String(daysInMonth(bulan)).padStart(2, "0")}`;
+  const tanggalAkhirLabel = TANGGAL_PANJANG_FMT.format(new Date(`${akhirBulan}T00:00:00Z`));
+
+  let bytes: Uint8Array;
+  try {
+    bytes = buildMonthlyReportDocx(templateBytes, {
+      tahun: tahun!,
+      namaUser: ctx.user.nama,
+      // Nama bulan SAJA (bukan agg.bulanLabel yang "September 2026") — tahun sudah ada
+      // terpisah di {TA}. Kapital semua karena teks statis "BULAN" di template juga kapital.
+      bulanLabel: bulanSajaLabel(bulan).toUpperCase(),
+      tanggalAkhirLabel,
+      hari: agg.hari,
+      tasks: agg.tasks,
+      taskDatesWorked: agg.taskDatesWorked,
+      aktivitas,
+      lampiran,
+      saranLines: getSaranLines(ctx.user.id, bulan),
+    });
+  } catch (err) {
+    // Template rusak/tidak sesuai format docx yang bisa dibaca docxtemplater — pesan jelas,
+    // bukan 500 mentah (ADR-0019: "jangan menebak isi template", tapi juga jangan diam-diam
+    // gagal kalau ternyata memang tidak valid).
+    return errorResponse(400, err instanceof Error ? `Template Word tidak valid: ${err.message}` : "Template Word tidak valid.");
+  }
+
+  const docxBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(docxBuffer).set(bytes);
+
+  return new Response(docxBuffer, {
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "Content-Disposition": `attachment; filename="laporan-${slug(ctx.user.nama)}-${bulan}.docx"`,
     },
   });
 }

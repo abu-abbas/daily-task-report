@@ -13,7 +13,9 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "docxtemplater": "^3.69.3",
     "pdf-lib": "^1.17.1",
+    "pizzip": "^3.2.0",
     "zod": "^4.5.4"
   }
 }

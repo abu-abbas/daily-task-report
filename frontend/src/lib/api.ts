@@ -411,3 +411,35 @@ export interface ReportPreview {
 }
 export const fetchMonthlyReportPreview = (bulan: string) =>
   api<ReportPreview>(`/reports/monthly-preview?bulan=${bulan}`);
+
+// Saran & Rekomendasi per bulan — opsional (kosong = tidak ditampilkan di laporan Word),
+// TIDAK prefill dari bulan lain.
+export const fetchSaran = (bulan: string) => api<{ isi: string }>(`/saran?bulan=${bulan}`);
+
+export const saveSaran = (bulan: string, isi: string) =>
+  api<{ isi: string }>(`/saran?bulan=${bulan}`, { method: "PUT", body: JSON.stringify({ isi }) });
+
+// ADR-0019 revisi 2026-09-11: laporan diunduh sebagai Word hasil mail-merge ke template MILIK
+// TENAGA AHLI SENDIRI (bukan admin/per-jabatan) — PDF (di atas) tidak lagi dipakai di UI.
+export interface LaporanTemplate {
+  namaAsli: string;
+  uploadedAt: string;
+}
+
+export const fetchMyLaporanTemplate = () => api<{ template: LaporanTemplate | null }>("/laporan-template");
+
+// Upload pakai FormData — TIDAK lewat helper api() (selalu paksa Content-Type: application/json),
+// sama pola uploadAttachment.
+export async function uploadLaporanTemplate(file: File): Promise<{ template: LaporanTemplate }> {
+  const form = new FormData();
+  form.set("file", file);
+  const res = await fetch("/api/laporan-template", { method: "POST", credentials: "same-origin", body: form });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(body?.error ?? "Terjadi kesalahan.", res.status);
+  return body;
+}
+
+export const deleteLaporanTemplate = () => api<void>("/laporan-template", { method: "DELETE" });
+
+// Dipakai langsung sebagai href (cookie sesi ikut otomatis), sama pola monthlyReportPdfUrl.
+export const monthlyReportWordUrl = (bulan: string) => `/api/reports/monthly-word?bulan=${bulan}`;

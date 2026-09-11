@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PDFDocument } from "pdf-lib";
+import PizZip from "pizzip";
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
@@ -11,7 +12,31 @@ const { login } = await import("../src/auth");
 const { isWorkday } = await import("../src/kalender");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleCreateTask } = await import("../src/routes/tasks");
-const { handleMonthlyReportPdf, handleMonthlyReportPreview } = await import("../src/routes/reports");
+const { handleMonthlyReportPdf, handleMonthlyReportPreview, handleMonthlyReportWord } = await import("../src/routes/reports");
+const { handleUploadLaporanTemplate } = await import("../src/routes/laporan-template");
+
+// Docx minimal valid dengan seluruh placeholder yang dipakai buildMonthlyReportDocx — bukan
+// file template asli pengguna (itu privat), cukup untuk uji pipeline mail-merge end-to-end.
+function buildMinimalDocx(): Uint8Array {
+  const zip = new PizZip();
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+  );
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+  );
+  zip.file(
+    "word/_rels/document.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`,
+  );
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{TA} {BULAN} {NAMA_TENAGA_AHLI} {DATE_END}</w:t></w:r></w:p><w:p><w:r><w:t>{%TIMESHEET}</w:t></w:r></w:p><w:p><w:r><w:t>{%AKTIVITAS}</w:t></w:r></w:p><w:p><w:r><w:t>{%LAMPIRAN_PEKERJAAN}</w:t></w:r></w:p><w:p><w:r><w:t>{%SARAN _REKOMENDASI}</w:t></w:r></w:p></w:body></w:document>`,
+  );
+  return zip.generate({ type: "uint8array" });
+}
 
 const TENAGA_EMAIL = "tenaga.reports@example.test";
 const PASSWORD = "kata-sandi-aman";
@@ -40,6 +65,16 @@ let taskId: number;
 function req(path: string, token?: string): Request {
   return new Request(`http://localhost${path}`, {
     headers: token ? { Cookie: `session=${token}` } : {},
+  });
+}
+
+function reqUploadTemplate(token: string, file: File): Request {
+  const form = new FormData();
+  form.set("file", file);
+  return new Request("http://localhost/api/laporan-template", {
+    method: "POST",
+    headers: { Cookie: `session=${token}` },
+    body: form,
   });
 }
 
@@ -93,6 +128,8 @@ beforeAll(async () => {
     }),
   );
   taskId = ((await taskRes.json()) as { task: { id: number } }).task.id;
+
+  db.query("INSERT INTO saran_bulanan (user_id, bulan, isi) VALUES (?, ?, '1) Terapkan CI/CD')").run(tenagaId, BULAN);
 
   db.query(
     "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', '- Poin satu\n- Poin dua')",
@@ -152,6 +189,44 @@ describe("GET /api/reports/monthly", () => {
     const bytes = new Uint8Array(await res.arrayBuffer());
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBeGreaterThan(0);
+  });
+});
+
+describe("GET /api/reports/monthly-word", () => {
+  test("ditolak tanpa login", async () => {
+    const res = await handleMonthlyReportWord(req(`/api/reports/monthly-word?bulan=${BULAN}`));
+    expect(res.status).toBe(401);
+  });
+
+  test("409 kalau belum pernah upload template", async () => {
+    const res = await handleMonthlyReportWord(req(`/api/reports/monthly-word?bulan=${BULAN}`, tenagaToken));
+    expect(res.status).toBe(409);
+  });
+
+  test("200 + Content-Type docx setelah upload template — merge nama/timesheet/aktivitas/lampiran/saran", async () => {
+    const uploadRes = await handleUploadLaporanTemplate(
+      reqUploadTemplate(tenagaToken, new File([buildMinimalDocx()], "template.docx")),
+    );
+    expect(uploadRes.status).toBe(201);
+
+    const res = await handleMonthlyReportWord(req(`/api/reports/monthly-word?bulan=${BULAN}`, tenagaToken));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const zip = new PizZip(bytes);
+    const documentXml = zip.file("word/document.xml")!.asText();
+    expect(documentXml).toContain("2026");
+    expect(documentXml).toContain("Tenaga Reports");
+    expect(documentXml).toContain("feat(reports): Task Reports");
+    expect(zip.file(/word\/media\/image\d+\./)!.length).toBeGreaterThan(0);
+  });
+
+  test("ditolak (400) format bulan salah", async () => {
+    const res = await handleMonthlyReportWord(req("/api/reports/monthly-word?bulan=2026-3", tenagaToken));
+    expect(res.status).toBe(400);
   });
 });
 

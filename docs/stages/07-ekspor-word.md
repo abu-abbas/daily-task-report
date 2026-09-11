@@ -1,19 +1,19 @@
 # Stage 07 — Ekspor Word menurut tipe programmer
 
-- Status: Cicilan awal (PDF generik, tanpa template) selesai 2026-09-08 buat validasi data laporan; layout Word asli per tipe programmer masih menunggu template.
+- Status: **Selesai** (final, 2026-09-11) — ekspor jadi Word hasil mail-merge ke template `.docx` yang diupload masing-masing tenaga ahli sendiri, lihat [ADR-0019 bagian "Hapus Jabatan/Kontrak/PPK/Ruang Lingkup/Pendahuluan"](../adr/0019-word-per-tipe.md#hapus-jabatankontrakppkruang-lingkuppendahuluan--dipakai-nyata-ternyata-tidak-terpakai-2026-09-11-hari-yang-sama) untuk versi terbaru. Riwayat revisi hari itu (PDF generik → PDF penuh dengan Cover/BAB I-VI → Word mail-merge → mesin Kontrak/Jabatan/Ruang Lingkup/Pendahuluan dihapus lagi karena ternyata tidak kepakai) ada di ADR-0019, dibiarkan tidak dihapus sebagai jejak. Cakupan akhir: cuma Nama/Timesheet/Tabel Aktifitas/Lampiran (wajib) + Saran & Rekomendasi (opsional) yang di-mail-merge; sisanya statis di file template masing-masing orang. Q-06 soal "template per tipe jabatan" jadi tidak relevan untuk pendekatan ini (template per orang, bukan per jabatan).
 - Prasyarat: Stage 5 untuk data laporan. Urutan kerja normal setelah Stage 6; template tidak menghalangi Stage 1–6.
-- Keputusan: [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0013](../adr/0013-izin-form.md), [ADR-0014](../adr/0014-izin-realisasi.md), [ADR-0016](../adr/0016-attachment.md), [ADR-0019](../adr/0019-word-per-tipe.md), [ADR-0025](../adr/0025-metode-ponytail.md).
+- Keputusan: [ADR-0007](../adr/0007-tanggal-realisasi.md), [ADR-0013](../adr/0013-izin-form.md), [ADR-0014](../adr/0014-izin-realisasi.md), [ADR-0016](../adr/0016-attachment.md), [ADR-0019](../adr/0019-word-per-tipe.md), [ADR-0025](../adr/0025-metode-ponytail.md), [ADR-0046](../adr/0046-skema-fisik-laporan-template.md).
 
 ## Cakupan
 
-- Terima dan pelajari contoh .docx untuk setiap tipe programmer yang masuk cakupan.
-- Tetapkan pemetaan tipe programmer ke template dan jelaskan perubahan skema minimum jika diperlukan.
-- Hasilkan satu dokumen per tenaga ahli per bulan: timesheet, narasi realisasi, izin, serta lampiran sesuai template.
-- Gunakan placeholder dari spec hanya bila cocok dengan template aktual; jangan membuat editor template generik.
+- Terima dan pelajari contoh nyata (PDF, bukan lagi .docx) untuk setiap tipe programmer yang masuk cakupan.
+- Tetapkan pemetaan tipe programmer ke isi Ruang Lingkup (BAB II) dan jelaskan perubahan skema minimum jika diperlukan (Pendahuluan, Nama Kegiatan, Saran & Rekomendasi sebagai input).
+- Hasilkan satu dokumen PDF per tenaga ahli per bulan: cover, daftar isi, pendahuluan, ruang lingkup, timesheet, narasi realisasi, izin, lampiran, saran & rekomendasi, penutup — sesuai contoh.
+- Gunakan placeholder dari spec hanya bila cocok dengan contoh aktual; jangan membuat editor template generik.
 
 ## Kriteria selesai dan pemeriksaan
 
-- [ ] Dokumen untuk setiap tipe yang disepakati dapat dibuka dan layout/isinya sesuai contoh pengguna.
+- [ ] Dokumen PDF untuk setiap tipe yang disepakati sesuai layout/isi contoh pengguna.
 - [ ] Data dipilih berdasarkan tanggal pekerjaan pada bulan dan user yang benar.
 - [ ] Izin, hari tanpa laporan, libur, dan attachment mengikuti aturan template; tidak ada penggandaan aktivitas karena join.
 - [ ] Template/tipe yang belum tersedia ditangani dengan pesan jelas, tidak memakai template yang keliru diam-diam.
@@ -44,4 +44,9 @@ Kriteria selesai di atas mengukur deliverable Word per tipe programmer (inti sta
 - **Diverifikasi lewat Playwright** (akun uji sementara, 3 task lintas 2 tag, realisasi di beberapa tanggal termasuk yang bertabrakan dengan akhir pekan sungguhan bulan berjalan, data dihapus setelah selesai): buka tab Timesheet → warna cell cocok (abu di tanggal realisasi per task, merah persis di akhir pekan sungguhan bulan itu). Cek lewat `scrollWidth`/`clientWidth` DOM (bukan cuma visual) bahwa kedua `ScrollArea` (Daftar dan Timesheet) benar-benar bisa di-scroll horizontal dan `document.body` TIDAK ikut melebar (tidak ada scroll halaman ke samping) — lalu scroll manual ke kanan dan screenshot ulang, kolom "Lampiran"/hari-hari akhir bulan yang tadinya terpotong jadi kelihatan. Screenshot desktop+dark, desktop+light, mobile+dark — di mobile grid timesheet tetap ke-clip rapi oleh `ScrollArea`, tidak bocor ke luar layar.
 - Susulan: kolom Catatan di tab Daftar sempat ketahuan (lewat screenshot user) masih menampilkan checkbox interaktif asli, bukan bullet — beda dari isi PDF yang sudah disederhanakan. Diperbaiki lewat konversi teks checklist ke bullet sebelum masuk `MiniMarkdownText` (`catatanUntukPratinjau`), diverifikasi lewat Playwright: seed satu baris catatan checklist campuran (`- [x]`/`- [ ]`), cek `table input[type="checkbox"]` count di halaman = 0 setelah fix (sebelumnya > 0).
 
-**Belum dikerjakan**: layout Word asli per tipe programmer (nunggu Q-06/template dari user), akses admin/atasan generate laporan orang lain, tampilan kendala di laporan, bold/italic di teks catatan PDF.
+**Laporan PDF lengkap BAB I-VI + backend CRUD kontrak/jabatan/ppk/ruang-lingkup/pendahuluan/saran** — backend selesai 2026-09-11 (lihat [ADR-0019 bagian "Backend CRUD + laporan PDF lengkap"](../adr/0019-word-per-tipe.md#backend-crud--laporan-pdf-lengkap-bab-i-vi-diimplementasikan) dan [ADR-0046](../adr/0046-skema-fisik-laporan-template.md)):
+
+- **Backend**: endpoint baru `server/src/routes/{jabatan,kontrak,ppk,ruang-lingkup,pendahuluan,saran}.ts`, di-wire ke `server/src/index.ts`. `GET /api/reports/monthly` sekarang menggabungkan kontrak aktif (409 kalau tidak ada — self-fill dulu, bukan diam-diam kosong), PPK aktif, Ruang Lingkup (override user atau default jabatan), Pendahuluan (carry-forward dari bulan sebelumnya), dan Saran (409 kalau belum diisi — gate). `server/src/report-pdf.ts` (`buildMonthlyReportPdf`) menggambar seluruh dokumen: Cover → Daftar Isi (statis) → BAB I → BAB II → BAB III/IV (sudah ada) → BAB V → BAB VI (statis+tanda tangan).
+- **Test otomatis**: 220 test lolos lintas backend (55 baru/disesuaikan) — file baru per entitas plus penyesuaian `reports.test.ts` untuk gate kontrak/saran (kontrak dibuat berjangka luas Jan-Des supaya bulan-bulan lain di rentang yang sama tetap bisa diuji "tanpa aktivitas tapi tidak error", terpisah dari test 409 kontrak-tidak-ada dan 409 saran-belum-diisi).
+- **Diverifikasi manual**: PDF sampel (data mencakup semua BAB baru) dirender ke gambar per halaman lewat `pdftoppm` (poppler) dan diperiksa satu-satu — bukan cuma mengandalkan page count/signature `%PDF-`.
+- **Belum dikerjakan**: UI frontend (form admin kelola jabatan/kontrak/ppk/ruang lingkup default; form tenaga ahli untuk kontrak self-fill, override ruang lingkup, pendahuluan, saran; alur di halaman Laporan saat kontrak/saran belum ada), akses admin/atasan generate laporan orang lain, tampilan kendala di laporan, bold/italic di teks catatan PDF, contoh Ruang Lingkup untuk jabatan selain Programmer (Q-06 masih terbuka).

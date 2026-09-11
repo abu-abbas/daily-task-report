@@ -4,6 +4,8 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 data/attachments/
+data/laporan-template/
 .env
 .env.*
 !.env.example
+.DS_Store

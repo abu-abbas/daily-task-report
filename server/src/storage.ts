@@ -28,12 +28,18 @@ export async function saveAttachmentFile(
   return join("attachments", ...segs, filename);
 }
 
-export function deleteAttachmentFile(relativePath: string): void {
+// Dipakai attachment maupun template laporan — hapus file di disk, abaikan kalau memang sudah
+// tidak ada (tetap lanjut hapus baris DB-nya), bukan error yang menghentikan alur hapus.
+function safeUnlink(relativePath: string): void {
   try {
     unlinkSync(join(storageDir, relativePath));
   } catch {
-    // Sudah tidak ada di disk — abaikan, tetap lanjut hapus baris DB-nya.
+    // sudah tidak ada di disk — abaikan.
   }
+}
+
+export function deleteAttachmentFile(relativePath: string): void {
+  safeUnlink(relativePath);
 }
 
 export function absoluteAttachmentPath(relativePath: string): string {
@@ -62,4 +68,31 @@ export function detectImageExt(bytes: Uint8Array): "jpg" | "png" | null {
 
 export function extToMime(ext: "jpg" | "png"): string {
   return ext === "jpg" ? "image/jpeg" : "image/png";
+}
+
+const laporanTemplateRoot = join(storageDir, "laporan-template");
+
+// Nama file per upload dibuat UNIK (UUID), bukan `<userId>.docx` tetap — biar tidak ada
+// keraguan file lama ke-cache/ke-reuse diam-diam (baris DB `laporan_template.file_path` tetap
+// cuma satu per user, baris lama di-update menunjuk path baru ini; file lama dihapus terpisah
+// oleh pemanggil setelah write baru berhasil, lihat routes/laporan-template.ts).
+export async function saveLaporanTemplateFile(userId: number, bytes: Uint8Array): Promise<string> {
+  mkdirSync(laporanTemplateRoot, { recursive: true });
+  const relative = join("laporan-template", `${userId}-${randomUUID()}.docx`);
+  await Bun.write(join(storageDir, relative), bytes);
+  return relative;
+}
+
+export function deleteLaporanTemplateFile(relativePath: string): void {
+  safeUnlink(relativePath);
+}
+
+export function absoluteLaporanTemplatePath(relativePath: string): string {
+  return join(storageDir, relativePath);
+}
+
+// Sniff signature ZIP (docx adalah file ZIP) — validasi kasar isi file, bukan cuma percaya
+// ekstensi/MIME yang diklaim klien (pola sama seperti detectImageExt, ADR-0016).
+export function isZipSignature(bytes: Uint8Array): boolean {
+  return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07);
 }

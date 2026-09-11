@@ -12,9 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
 import TimesheetPreview from "@/components/reports/TimesheetPreview.vue";
+import DetailLaporanPanel from "@/components/reports/DetailLaporanPanel.vue";
 import { LOCALE } from "@/lib/locale";
-import { monthlyReportPdfUrl } from "@/lib/api";
+import { monthlyReportWordUrl } from "@/lib/api";
 import { useMonthlyReportPreviewQuery } from "@/composables/useReports";
+import { useLaporanTemplateQuery } from "@/composables/useLaporanTemplate";
 
 function bulanSekarangStr(): string {
   const now = new Date();
@@ -71,6 +73,12 @@ const bulanTerpilihLabel = computed(() => {
 
 const previewQuery = useMonthlyReportPreviewQuery(bulanTerpilih, sudahTampil);
 const preview = computed(() => previewQuery.data.value);
+
+// Gate ADR-0019 revisi (2026-09-11): tombol unduh Word butuh template milik sendiri sudah
+// diunggah — dicek di sini juga (bukan cuma diserahkan ke server) supaya user diarahkan ke tab
+// "Detail Laporan" alih-alih baru tahu lewat halaman error JSON mentah setelah klik unduh.
+const laporanTemplateQuery = useLaporanTemplateQuery();
+const siapUnduh = computed(() => laporanTemplateQuery.data.value?.template != null);
 
 function tanggalKosongLabel(tanggal: string): string {
   return String(Number(tanggal.slice(8, 10)));
@@ -162,16 +170,27 @@ function catatanUntukPratinjau(catatan: string): string {
           <span tabindex="0" class="ml-auto inline-block">
             <Button disabled class="pointer-events-none w-full">
               <FileDown class="size-4" />
-              Unduh laporan (PDF)
+              Unduh laporan (Word)
             </Button>
           </span>
         </TooltipTrigger>
         <TooltipContent>Klik "Tampilkan" dulu buat cek datanya sebelum diunduh</TooltipContent>
       </Tooltip>
+      <Tooltip v-else-if="!siapUnduh">
+        <TooltipTrigger as-child>
+          <span tabindex="0" class="ml-auto inline-block">
+            <Button disabled class="pointer-events-none w-full">
+              <FileDown class="size-4" />
+              Unduh laporan (Word)
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Unggah template Word Anda dulu di tab "Detail Laporan"</TooltipContent>
+      </Tooltip>
       <Button v-else as-child class="ml-auto">
-        <a :href="monthlyReportPdfUrl(bulanTerpilih)" target="_blank">
+        <a :href="monthlyReportWordUrl(bulanTerpilih)" target="_blank">
           <FileDown class="size-4" />
-          Unduh laporan (PDF)
+          Unduh laporan (Word)
         </a>
       </Button>
     </div>
@@ -183,7 +202,7 @@ function catatanUntukPratinjau(catatan: string): string {
         </EmptyMedia>
         <EmptyTitle>Belum ditampilkan</EmptyTitle>
         <EmptyDescription>
-          Klik "Tampilkan" untuk lihat pratinjau data {{ bulanTerpilihLabel }} sebelum diunduh sebagai PDF.
+          Klik "Tampilkan" untuk lihat pratinjau data {{ bulanTerpilihLabel }} sebelum diunduh sebagai Word.
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
@@ -211,6 +230,10 @@ function catatanUntukPratinjau(catatan: string): string {
           <TabsList>
             <TabsTrigger value="daftar">Daftar</TabsTrigger>
             <TabsTrigger value="timesheet">Timesheet</TabsTrigger>
+            <TabsTrigger value="detail">
+              Detail Laporan
+              <Badge v-if="!siapUnduh" variant="destructive" class="ml-1.5 px-1.5 py-0 text-[10px]">!</Badge>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="daftar">
@@ -260,6 +283,10 @@ function catatanUntukPratinjau(catatan: string): string {
 
           <TabsContent value="timesheet">
             <TimesheetPreview :timesheet="preview.timesheet" />
+          </TabsContent>
+
+          <TabsContent value="detail">
+            <DetailLaporanPanel :bulan="bulanTerpilih" />
           </TabsContent>
         </Tabs>
       </template>
