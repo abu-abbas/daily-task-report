@@ -148,7 +148,7 @@ async function buildLampiranDanAktivitas(
 ): Promise<{ lampiran: ReportLampiran[]; aktivitas: ReportAktivitasRow[] }> {
   const lampiran: ReportLampiran[] = [];
   const aktivitas: ReportAktivitasRow[] = [];
-  for (const r of agg.rows) {
+  for (const [index, r] of agg.rows.entries()) {
     const lampiranNumbers: number[] = [];
     for (const a of agg.attachmentsByLog.get(r.taskLogId) ?? []) {
       const ext = a.fileType === "image/png" ? "png" : "jpg";
@@ -167,7 +167,9 @@ async function buildLampiranDanAktivitas(
     }
 
     aktivitas.push({
-      no: agg.taskNoMap.get(r.taskId)!,
+      // Nomor urut baris kronologis, bukan nomor task tetap (agg.taskNoMap) — task yang sama
+      // muncul di beberapa tanggal tetap dapat No baru tiap baris di "Daftar Kegiatan".
+      no: index + 1,
       tanggalLabel: tanggalLabel(r.tanggal),
       projectNama: r.projectNama,
       kegiatan: taskLabel(r.deskripsi, r.tag),
@@ -294,8 +296,11 @@ export async function handleMonthlyReportPreview(req: Request, hariIniOverride?:
 
   const agg = await aggregateMonthlyReport(ctx.user.id, bulan);
 
-  const items = agg.rows.map((r) => ({
-    no: agg.taskNoMap.get(r.taskId)!,
+  // No di sini nomor urut baris (kronologis, ADR-0019) — beda dari agg.taskNoMap yang nomor
+  // task tetap (dipakai Timesheet/Gantt). Task yang sama muncul di beberapa tanggal tetap dapat
+  // No baru tiap baris, bukan mengulang nomor task-nya.
+  const items = agg.rows.map((r, index) => ({
+    no: index + 1,
     tanggal: r.tanggal,
     tanggalLabel: tanggalLabel(r.tanggal),
     projectNama: r.projectNama,
