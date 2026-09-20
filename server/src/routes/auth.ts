@@ -52,5 +52,10 @@ function publicUser(ctx: NonNullable<ReturnType<typeof getAuthContext>>) {
     nama: ctx.user.nama,
     email: ctx.user.email,
     roles: ctx.roles,
+    // Token GitLab TIDAK PERNAH dikirim ke client (ADR-0047) — cuma status koneksi buat
+    // ditampilkan masked di UI ("terhubung sebagai @username").
+    gitlabUsername: ctx.user.gitlab_username,
+    gitlabAvatarUrl: ctx.user.gitlab_avatar_url,
+    hasGitlabToken: ctx.user.gitlab_private_token !== null,
   };
 }

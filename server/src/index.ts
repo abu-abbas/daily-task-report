@@ -25,6 +25,7 @@ import {
   handleUploadLaporanTemplate,
 } from "./routes/laporan-template";
 import { handleGetSaran, handleSaveSaran } from "./routes/saran";
+import { handleListGitlabCommits, handleListGitlabProjects, handleSaveGitlabToken } from "./routes/gitlab";
 
 runMigrations();
 
@@ -79,6 +80,9 @@ Bun.serve({
       DELETE: (req) => handleDeleteLaporanTemplate(req),
     },
     "/api/saran": { GET: handleGetSaran, PUT: (req) => handleSaveSaran(req) },
+    "/api/gitlab/projects": { GET: (req) => handleListGitlabProjects(req) },
+    "/api/gitlab/commits": { GET: (req) => handleListGitlabCommits(req) },
+    "/api/me/gitlab-token": { PUT: (req) => handleSaveGitlabToken(req) },
   },
   fetch() {
     return new Response("Not found", { status: 404 });

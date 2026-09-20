@@ -199,10 +199,23 @@ const newTaskSchema = z
     projectBaru: z.string().min(1).optional(),
     deskripsi: z.string().min(1, "Deskripsi task wajib diisi."),
     tag: z.string().optional(),
+    // Task dari commit GitLab (ADR-0047) sudah pasti pekerjaan yang sudah kelar saat dicommit —
+    // langsung dibuat status 'closed', bukan 'open' menunggu ditandai selesai manual.
+    tutupLangsung: z.boolean().optional(),
   })
   .refine((v) => (v.projectId !== undefined) !== (v.projectBaru !== undefined), {
     message: "Isi salah satu: projectId atau projectBaru pada newTask.",
   });
+
+// Referensi commit GitLab (ADR-0039/0047) — dikirim bareng item saat commit diimpor jadi task,
+// ditulis ke task_log_commits SETELAH task_log-nya benar-benar ada (bukan di sini), sekaligus
+// jadi penanda "sudah diimpor" buat GET /api/gitlab/commits berikutnya.
+const gitlabCommitSchema = z.object({
+  sha: z.string().min(1),
+  commitUrl: z.string().min(1),
+  pesan: z.string(),
+  authoredAt: z.string(),
+});
 
 const logItemSchema = z
   .object({
@@ -211,6 +224,7 @@ const logItemSchema = z
     jenis: z.enum(["rencana", "realisasi"]),
     catatan: z.string().optional(),
     isExtra: z.boolean().optional(),
+    gitlabCommit: gitlabCommitSchema.optional(),
   })
   .refine((v) => (v.taskId !== undefined) !== (v.newTask !== undefined), {
     message: "Isi salah satu: taskId atau newTask.",
@@ -235,7 +249,7 @@ function upsertTaskLog(
   jenis: "rencana" | "realisasi",
   catatan: string | null,
   isExtra: boolean,
-): void {
+): number {
   // ADR-0041: satu baris per (user_id, task_id, tanggal, jenis) — submit ulang meng-update,
   // bukan menggandakan.
   const existing = db
@@ -250,11 +264,14 @@ function upsertTaskLog(
       isExtra ? 1 : 0,
       existing.id,
     );
-  } else {
-    db.query(
-      "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan, is_extra) VALUES (?, ?, ?, ?, ?, ?)",
-    ).run(taskId, userId, tanggal, jenis, catatan, isExtra ? 1 : 0);
+    return existing.id;
   }
+  const result = db
+    .query(
+      "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan, is_extra) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .run(taskId, userId, tanggal, jenis, catatan, isExtra ? 1 : 0);
+  return Number(result.lastInsertRowid);
 }
 
 // ADR-0030 + ADR-0014: null kalau boleh lanjut, Response kalau harus ditolak.
@@ -332,16 +349,25 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
   // ADR-0042: usulan "Lainnya" dibuat di sini, dalam transaksi yang sama dengan task & log-nya
   // (bukan lebih dulu lewat endpoint terpisah) — supaya project baru tidak pernah nyantol tanpa
   // task/catatan kalau submit ini gagal atau dibatalkan.
+  // projectBaruCache: beberapa item di satu kali simpan (mis. impor banyak commit GitLab
+  // sekaligus ke "Lainnya" yang sama) bisa punya projectBaru dengan nama IDENTIK — tanpa cache
+  // ini tiap item bikin baris projects sendiri-sendiri, jadi N project "Lainnya" duplikat
+  // padahal user cuma mau satu.
+  const projectBaruCache = new Map<string, number>();
   function resolveProjectId(newTask: NonNullable<LogItem["newTask"]>): number {
     if (newTask.projectId !== undefined) return newTask.projectId;
+    const nama = newTask.projectBaru!;
+    const cached = projectBaruCache.get(nama);
+    if (cached !== undefined) return cached;
     const result = db
       .query("INSERT INTO projects (nama, is_active, belum_direkonsiliasi) VALUES (?, 1, 1)")
-      .run(newTask.projectBaru!);
+      .run(nama);
     const projectId = Number(result.lastInsertRowid);
     db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
       ctx!.user.id,
       projectId,
     );
+    projectBaruCache.set(nama, projectId);
     return projectId;
   }
 
@@ -349,13 +375,40 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
     let taskId = item.taskId;
     if (taskId === undefined && item.newTask) {
       const projectId = resolveProjectId(item.newTask);
+      const status = item.newTask.tutupLangsung ? "closed" : "open";
       const result = db
-        .query("INSERT INTO tasks (project_id, deskripsi, tag) VALUES (?, ?, ?)")
-        .run(projectId, item.newTask.deskripsi, item.newTask.tag ?? null);
+        .query("INSERT INTO tasks (project_id, deskripsi, tag, status) VALUES (?, ?, ?, ?)")
+        .run(projectId, item.newTask.deskripsi, item.newTask.tag ?? null, status);
       taskId = Number(result.lastInsertRowid);
     }
     const tanggalItem = item.jenis === "realisasi" ? hariKerjaSebelumnya : tanggal;
-    upsertTaskLog(ctx!.user.id, taskId!, tanggalItem, item.jenis, item.catatan?.trim() || null, item.isExtra ?? false);
+    const taskLogId = upsertTaskLog(
+      ctx!.user.id,
+      taskId!,
+      tanggalItem,
+      item.jenis,
+      item.catatan?.trim() || null,
+      item.isExtra ?? false,
+    );
+
+    // Ditulis di sini (transaksi "Simpan" yang sama), bukan saat commit dicentang di modal —
+    // draft yang batal/di-refresh sebelum "Simpan" tidak boleh menyisakan data nyantol (ADR-0047,
+    // sama prinsip project "Lainnya"). INSERT OR IGNORE: UNIQUE(ditambahkan_oleh, commit_sha)
+    // jadi jaring pengaman kalau ada race (mis. dua tab) — gagal diam-diam, bukan error simpan.
+    if (item.gitlabCommit) {
+      db.query(
+        `INSERT OR IGNORE INTO task_log_commits
+         (task_log_id, commit_sha, commit_url, pesan, authored_at, ditambahkan_oleh)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(
+        taskLogId,
+        item.gitlabCommit.sha,
+        item.gitlabCommit.commitUrl,
+        item.gitlabCommit.pesan,
+        item.gitlabCommit.authoredAt,
+        ctx!.user.id,
+      );
+    }
   }
 
   db.transaction(() => {

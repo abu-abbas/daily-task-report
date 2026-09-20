@@ -7,6 +7,9 @@ export interface User {
   password_hash: string | null;
   atasan_id: number | null;
   supervisi_id: number | null;
+  gitlab_username: string | null;
+  gitlab_avatar_url: string | null;
+  gitlab_private_token: string | null;
 }
 
 export interface AuthContext {

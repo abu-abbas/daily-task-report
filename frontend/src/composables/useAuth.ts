@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
-import { fetchMe, postLogin, postLogout } from "@/lib/api";
+import { fetchMe, postLogin, postLogout, saveGitlabToken } from "@/lib/api";
 
 export const ME_QUERY_KEY = ["me"];
 
@@ -21,5 +21,13 @@ export function useLogout() {
   return useMutation({
     mutationFn: postLogout,
     onSuccess: () => queryClient.setQueryData(ME_QUERY_KEY, null),
+  });
+}
+
+export function useSaveGitlabToken() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => saveGitlabToken(token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY }),
   });
 }

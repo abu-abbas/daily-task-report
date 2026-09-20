@@ -28,6 +28,9 @@ export interface CurrentUser {
   nama: string;
   email: string | null;
   roles: string[];
+  gitlabUsername: string | null;
+  gitlabAvatarUrl: string | null;
+  hasGitlabToken: boolean;
 }
 
 export const fetchMe = () => api<{ user: CurrentUser }>("/me");
@@ -250,6 +253,19 @@ export interface NewTaskLogPayload {
   projectBaru?: string;
   deskripsi: string;
   tag?: string;
+  // Task dari commit GitLab (ADR-0047) sudah pasti kelar saat dicommit — dibuat langsung
+  // status 'closed', bukan 'open' menunggu ditandai selesai manual.
+  tutupLangsung?: boolean;
+}
+
+// Referensi commit GitLab (ADR-0039/0047) — ditulis ke task_log_commits SETELAH task_log-nya
+// benar-benar tersimpan, dipakai server buat menandai "sudah diimpor" ke GET /api/gitlab/commits
+// berikutnya (cegah commit yang sama diimpor dua kali jadi task duplikat).
+export interface GitlabCommitRef {
+  sha: string;
+  commitUrl: string;
+  pesan: string;
+  authoredAt: string;
 }
 
 export interface SaveTaskLogItem {
@@ -258,6 +274,7 @@ export interface SaveTaskLogItem {
   jenis: "rencana" | "realisasi";
   catatan?: string;
   isExtra?: boolean;
+  gitlabCommit?: GitlabCommitRef;
 }
 
 export const saveDailyInput = (tanggal: string, items: SaveTaskLogItem[]) =>
@@ -443,3 +460,37 @@ export const deleteLaporanTemplate = () => api<void>("/laporan-template", { meth
 
 // Dipakai langsung sebagai href (cookie sesi ikut otomatis), sama pola monthlyReportPdfUrl.
 export const monthlyReportWordUrl = (bulan: string) => `/api/reports/monthly-word?bulan=${bulan}`;
+
+// Impor commit GitLab jadi draft task realisasi (ADR-0047) — user pilih repo GitLab dulu
+// (daftar cepat, satu panggilan), baru commit di-fetch dari repo itu saja, bukan nge-loop
+// semua repo yang bisa diakses (lambat/gampang timeout).
+export interface GitlabProjectItem {
+  id: number;
+  name: string;
+}
+
+export const fetchGitlabProjects = () => api<{ projects: GitlabProjectItem[] }>("/gitlab/projects");
+
+export interface GitlabCommitItem {
+  sha: string;
+  shortSha: string;
+  title: string;
+  body: string;
+  tag: string | null;
+  authoredAt: string;
+  webUrl: string;
+  // Sudah pernah diimpor jadi task sebelumnya (dicek task_log_commits per commit_sha) — ADR-0047.
+  alreadyImported: boolean;
+}
+
+export const fetchGitlabCommits = (gitlabProjectId: number, tanggal: string) =>
+  api<{ commits: GitlabCommitItem[] }>(`/gitlab/commits?projectId=${gitlabProjectId}&tanggal=${tanggal}`);
+
+// Backend verifikasi token ke GitLab (GET /api/v4/user) dulu sebelum disimpan — token yang
+// gagal/invalid tidak pernah ditulis ke DB (ADR-0047). Token itu sendiri tidak pernah dikirim
+// balik oleh server, cuma username/avatar hasil verifikasi.
+export const saveGitlabToken = (token: string) =>
+  api<{ gitlabUsername: string; gitlabAvatarUrl: string | null }>("/me/gitlab-token", {
+    method: "PUT",
+    body: JSON.stringify({ token }),
+  });

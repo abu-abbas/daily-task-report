@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import { parseDate } from "@internationalized/date";
-import { CalendarIcon, CircleCheck, Clock, Plus, Send } from "@lucide/vue";
+import { CalendarIcon, CircleCheck, Clock, GitBranch, Plus, Send } from "@lucide/vue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -34,12 +34,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import TaskPickerForm from "@/components/input-harian/TaskPickerForm.vue";
+import GitlabCommitImportDialog from "@/components/input-harian/GitlabCommitImportDialog.vue";
 import KendalaList from "@/components/input-harian/KendalaList.vue";
 import AttachmentList from "@/components/input-harian/AttachmentList.vue";
 import ProjectBadge from "@/components/input-harian/ProjectBadge.vue";
 import MiniMarkdownEditor from "@/components/input-harian/MiniMarkdownEditor.vue";
 import MiniMarkdownText from "@/components/input-harian/MiniMarkdownText.vue";
-import { ApiError, type IzinJenis, type SaveTaskLogItem } from "@/lib/api";
+import { ApiError, type GitlabCommitRef, type IzinJenis, type SaveTaskLogItem } from "@/lib/api";
 import { groupByProject } from "@/lib/groupByProject";
 import { formatTanggalPanjang } from "@/lib/locale";
 import { useCancelLeave, useDailyInputQuery, useSaveDailyInput, useSaveLeave } from "@/composables/useTaskLogs";
@@ -131,8 +132,9 @@ const rencanaCatatanByTaskId = computed(() => catatanByTaskId(data.value?.rencan
 interface DraftItem {
   key: number;
   taskId?: number;
-  newTask?: { projectId?: number; projectBaru?: string; deskripsi: string; tag?: string };
+  newTask?: { projectId?: number; projectBaru?: string; deskripsi: string; tag?: string; tutupLangsung?: boolean };
   catatan?: string;
+  gitlabCommit?: GitlabCommitRef;
 }
 let draftKeySeq = 0;
 const tambahanDrafts = ref<DraftItem[]>([]);
@@ -151,6 +153,7 @@ function draftLabel(d: DraftItem): string {
 
 const tambahanDialogOpen = ref(false);
 const rencanaDialogOpen = ref(false);
+const gitlabImportDialogOpen = ref(false);
 
 function addTambahan(payload: Omit<DraftItem, "key">) {
   tambahanDrafts.value.push({ ...payload, key: draftKeySeq++ });
@@ -231,7 +234,14 @@ const itemsToSave = computed<SaveTaskLogItem[]>(() => {
     }
   }
   for (const d of tambahanDrafts.value) {
-    items.push({ taskId: d.taskId, newTask: d.newTask, jenis: "realisasi", catatan: d.catatan, isExtra: true });
+    items.push({
+      taskId: d.taskId,
+      newTask: d.newTask,
+      jenis: "realisasi",
+      catatan: d.catatan,
+      isExtra: true,
+      gitlabCommit: d.gitlabCommit,
+    });
   }
   for (const d of rencanaDrafts.value) {
     items.push({ taskId: d.taskId, newTask: d.newTask, jenis: "rencana", catatan: d.catatan });
@@ -457,24 +467,47 @@ const totalAttachmentAkanHilang = computed(() =>
                 </div>
               </div>
 
-              <Dialog v-model:open="tambahanDialogOpen">
-                <DialogTrigger as-child>
-                  <Button type="button" size="sm" variant="outline" class="justify-self-start">
-                    <Plus class="mr-1 size-4" />
-                    Tambah kerjaan
-                  </Button>
-                </DialogTrigger>
-                <DialogContent class="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Tambah kerjaan</DialogTitle>
-                  </DialogHeader>
-                  <TaskPickerForm
-                    require-catatan
-                    :existing-catatan-by-task-id="tambahanCatatanByTaskId"
-                    @add="addTambahan"
-                  />
-                </DialogContent>
-              </Dialog>
+              <div class="flex flex-wrap gap-2">
+                <Dialog v-model:open="tambahanDialogOpen">
+                  <DialogTrigger as-child>
+                    <Button type="button" size="sm" variant="outline" class="justify-self-start">
+                      <Plus class="mr-1 size-4" />
+                      Tambah kerjaan
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent class="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Tambah kerjaan</DialogTitle>
+                    </DialogHeader>
+                    <TaskPickerForm
+                      require-catatan
+                      :existing-catatan-by-task-id="tambahanCatatanByTaskId"
+                      @add="addTambahan"
+                    />
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog v-model:open="gitlabImportDialogOpen">
+                  <DialogTrigger as-child>
+                    <Button type="button" size="sm" variant="outline" class="justify-self-start">
+                      <GitBranch class="mr-1 size-4" />
+                      Impor dari GitLab
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent class="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Impor commit GitLab</DialogTitle>
+                    </DialogHeader>
+                    <GitlabCommitImportDialog
+                      v-if="data"
+                      :open="gitlabImportDialogOpen"
+                      :tanggal="data.hariKerjaSebelumnya"
+                      @update:open="gitlabImportDialogOpen = $event"
+                      @add="addTambahan"
+                    />
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </CardContent>
         </Card>

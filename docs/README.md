@@ -72,6 +72,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0044 | [Pilih tanggal laporan, edit data tersimpan, dan form izin](adr/0044-tanggal-laporan-dan-izin.md) |
 | 0045 | [Penutupan task eksplisit dengan deskripsi opsional](adr/0045-penutupan-task.md) |
 | 0046 | [Skema fisik untuk laporan bulanan PDF lengkap — digantikan ADR-0019](adr/0046-skema-fisik-laporan-template.md) |
+| 0047 | [Realisasi terisi dari commit GitLab lewat token personal](adr/0047-realisasi-dari-commit-gitlab.md) |
 
 ## Tahapan pekerjaan
 
