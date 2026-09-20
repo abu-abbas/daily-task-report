@@ -1,9 +1,12 @@
 <script lang="ts">
 import { defineComponent, h, type VNode } from "vue";
 
+// Underscore di TENGAH kata (mis. "v_kolok_pptk") sengaja tidak dianggap italic — aturan asli
+// CommonMark, cuma "*" yang boleh dipakai intraword. Tanpa syarat batas kata ini, identifier
+// snake_case (lazim di pesan commit yang diimpor, ADR-0047) kepotong acak jadi italic parsial.
 function parseInline(text: string): (VNode | string)[] {
   const nodes: (VNode | string)[] = [];
-  const pattern = /(\*[^*\n]+\*|_[^_\n]+_)/g;
+  const pattern = /(\*[^*\n]+\*|(?<!\w)_[^_\n]+_(?!\w))/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(text))) {
