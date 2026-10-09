@@ -80,7 +80,8 @@ Kondisi kode per 2026-10-09 (diperiksa langsung, bukan asumsi):
 - Filter bulan di laporan memakai rentang tanggal (`BETWEEN 'YYYY-MM-01' AND akhir bulan`), bukan `LIKE 'YYYY-MM%'` yang tidak berlaku untuk kolom `date`.
 - **Folder data** dipisah dari lokasi database: `DATA_DIR` (default `data/`) untuk attachment, template Word, dan log.
 - **Salin data**: `bun --cwd=server run salin-data` menyalin `data/app.db` (atau `SQLITE_PATH`) ke Postgres yang masih kosong dalam satu transaksi, mempertahankan id, menyesuaikan sequence identity, menandai timestamp SQLite sebagai UTC, lalu membandingkan jumlah baris per tabel.
-- **Test** memakai database Postgres terpisah (`TEST_DATABASE_URL`, default `laporan_harian_test`, wajib berakhiran `_test`). `tests/setup.ts` (preload `bunfig.toml`) mengosongkan skemanya sekali per run; seeding memakai helper `tests/raw-db.ts` yang berbentuk mirip `bun:sqlite` supaya isi test lama tetap terbaca. `tests/schema.test.ts` sekarang membandingkan `schema.ts` dengan hasil migration lewat `information_schema` (menjaga agar `db:generate` tidak terlupa).
+- **PGlite untuk lokal (tambahan 2026-10-09, setelah PR #4):** pengguna tidak punya Postgres di laptop. Daripada kembali ke SQLite untuk lokal (dua skema `sqlite-core`/`pg-core`, dua set migration, perilaku tanggal/UNIQUE/transaksi berbeda dari server), `DATABASE_URL` kosong sekarang berarti PGlite: PostgreSQL asli versi WASM yang jalan di dalam proses Bun, data di `DATA_DIR/pglite`. Skema, migration, dan query tetap satu; `db.ts` hanya memilih driver (`drizzle-orm/pglite` atau `drizzle-orm/bun-sql`). Server tetap memakai Postgres lewat `DATABASE_URL`. Batasannya: satu folder PGlite hanya bisa dibuka satu proses sekaligus.
+- **Test** memakai database Postgres terpisah (`TEST_DATABASE_URL`, wajib berakhiran `_test`), atau secara default PGlite baru di folder sementara sehingga `bun test` jalan tanpa server Postgres. `tests/setup.ts` (preload `bunfig.toml`) menyiapkan database dan menjalankan migration sekali per run; seeding memakai helper `tests/raw-db.ts` yang berbentuk mirip `bun:sqlite` supaya isi test lama tetap terbaca. `tests/schema.test.ts` sekarang membandingkan `schema.ts` dengan hasil migration lewat `information_schema` (menjaga agar `db:generate` tidak terlupa).
 
 ## Konsekuensi
 
@@ -93,5 +94,5 @@ Kondisi kode per 2026-10-09 (diperiksa langsung, bukan asumsi):
 ## Rincian terbuka
 
 - Apakah semua route dipasang validasi `@hono/zod-validator`, atau bertahap saat route itu disentuh.
-- Lingkungan Postgres untuk produksi dan backup terjadwal (`pg_dump`) dibahas di [Stage 8](../stages/08-verifikasi-lokal.md). Pengembangan lokal dan test memakai instalasi Postgres biasa (lihat README); Docker belum diperlukan.
+- Lingkungan Postgres untuk produksi dan backup terjadwal (`pg_dump`) dibahas di [Stage 8](../stages/08-verifikasi-lokal.md). Pengembangan lokal dan test memakai PGlite secara default (lihat README); Docker tidak diperlukan.
 - Pilihan driver (`Bun.sql`) dan lingkungan test sudah diputuskan di tahap 3 (lihat catatan di atas).

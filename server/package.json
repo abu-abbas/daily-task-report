@@ -16,6 +16,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "docxtemplater": "^3.69.3",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.13",

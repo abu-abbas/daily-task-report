@@ -1,7 +1,8 @@
 // Skrip sekali jalan (ADR-0049 tahap 3): menyalin seluruh data dari database SQLite lama
 // (data/app.db) ke PostgreSQL. Jalankan SETELAH `bun run migrate` membuat tabel di Postgres:
 //
-//   bun run salin-data                      # SQLite di ../data/app.db, Postgres dari DATABASE_URL
+//   bun run salin-data                      # SQLite di ../data/app.db, tujuan Postgres dari DATABASE_URL
+//                                           # (atau PGlite di data/pglite kalau DATABASE_URL kosong)
 //   SQLITE_PATH=/path/app.db bun run salin-data
 //
 // Aman diulang: skrip menolak jalan kalau tabel Postgres sudah berisi, dan semua penyalinan
@@ -11,7 +12,7 @@ import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
-import { client } from "../src/db";
+import { closeDb, db, driver, rawQuery } from "../src/db";
 import * as schema from "../src/schema";
 
 const sqlitePath = process.env.SQLITE_PATH ?? join(import.meta.dir, "..", "..", "data", "app.db");
@@ -53,7 +54,7 @@ function nilai(value: unknown, sqlType: string): unknown {
 const hitungSqlite = (name: string) =>
   (sqlite.query(`SELECT COUNT(*) AS c FROM ${name}`).get() as { c: number }).c;
 const hitungPostgres = async (name: string) =>
-  Number((await client.unsafe(`SELECT COUNT(*)::int AS c FROM "${name}"`))[0].c);
+  Number((await rawQuery<{ c: number }>(`SELECT COUNT(*)::int AS c FROM "${name}"`))[0]!.c);
 
 const isiAwal = [];
 for (const table of tables) {
@@ -69,7 +70,7 @@ if (sudahBerisi.length > 0) {
   process.exit(1);
 }
 
-await client.begin(async (tx) => {
+await db.transaction(async (tx) => {
   for (const table of tables) {
     const config = getTableConfig(table);
     const columns = config.columns.map((c) => ({ name: c.name, sqlType: c.getSQLType() }));
@@ -83,34 +84,31 @@ await client.begin(async (tx) => {
       .all() as Record<string, unknown>[];
 
     const insertCols = columns.filter((c) => !tunda.has(c.name));
-    const placeholders = insertCols.map((_, i) => `$${i + 1}`).join(", ");
+    const placeholders = insertCols.map(() => "?").join(", ");
     const insertSql =
       `INSERT INTO "${config.name}" (${insertCols.map((c) => `"${c.name}"`).join(", ")}) ` +
       `${hasIdentity ? "OVERRIDING SYSTEM VALUE " : ""}VALUES (${placeholders})`;
     for (const row of rows) {
-      await tx.unsafe(insertSql, insertCols.map((c) => nilai(row[c.name], c.sqlType)));
+      await rawQuery(insertSql, insertCols.map((c) => nilai(row[c.name], c.sqlType)), tx);
     }
 
     if (tunda.size > 0) {
       for (const row of rows) {
         if (row.atasan_id === null && row.supervisi_id === null) continue;
-        await tx.unsafe(`UPDATE users SET atasan_id = $1, supervisi_id = $2 WHERE id = $3`, [
-          row.atasan_id,
-          row.supervisi_id,
-          row.id,
-        ]);
+        await rawQuery("UPDATE users SET atasan_id = ?, supervisi_id = ? WHERE id = ?", [row.atasan_id, row.supervisi_id, row.id], tx);
       }
     }
 
     // Id identity berikutnya harus melanjutkan id terbesar yang disalin, bukan mulai dari 1.
     if (hasIdentity && rows.length > 0) {
-      await tx.unsafe(`SELECT setval(pg_get_serial_sequence('"${config.name}"', 'id'), (SELECT MAX(id) FROM "${config.name}"))`);
+      await rawQuery(`SELECT setval(pg_get_serial_sequence('"${config.name}"', 'id'), (SELECT MAX(id) FROM "${config.name}"))`, [], tx);
     }
   }
 });
 
 // Pemeriksaan jumlah baris per tabel: SQLite (sumber) vs Postgres (tujuan).
 let cocok = true;
+console.log(`[salin-data] tujuan: ${driver}`);
 console.log("[salin-data] tabel                 sqlite  postgres");
 for (const table of tables) {
   const name = getTableConfig(table).name;
@@ -119,7 +117,7 @@ for (const table of tables) {
   if (sumber !== tujuan) cocok = false;
   console.log(`[salin-data] ${name.padEnd(20)} ${String(sumber).padStart(7)} ${String(tujuan).padStart(9)}${sumber === tujuan ? "" : "  <- BEDA"}`);
 }
-await client.close();
+await closeDb();
 sqlite.close();
 
 if (!cocok) {

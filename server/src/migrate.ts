@@ -1,5 +1,5 @@
-import { client, runMigrations } from "./db";
+import { closeDb, driver, runMigrations } from "./db";
 
 await runMigrations();
-console.log("[migrate] selesai");
-await client.close();
+console.log(`[migrate] selesai (${driver})`);
+await closeDb();

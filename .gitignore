@@ -6,6 +6,7 @@ data/*.db-wal
 data/attachments/
 data/laporan-template/
 data/logs/
+data/pglite/
 .env
 .env.*
 !.env.example
