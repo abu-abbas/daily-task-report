@@ -1,6 +1,6 @@
+import { requireLogin } from "../authz";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import {
   absoluteLaporanTemplatePath,
   deleteLaporanTemplateFile,
@@ -28,9 +28,8 @@ function publicRow(row: LaporanTemplateRow) {
 // Metadata template milik sendiri (bukan isi file) — dipakai UI buat tahu sudah upload atau
 // belum, sebelum menawarkan tombol "Unduh laporan (Word)".
 export function handleGetMyLaporanTemplate(req: Request): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const row = getRow(ctx.user.id);
   return json({ template: row ? publicRow(row) : null });
@@ -39,9 +38,8 @@ export function handleGetMyLaporanTemplate(req: Request): Response {
 // Satu template per user, upload ulang menimpa yang lama (bukan riwayat) — cuma versi terbaru
 // yang pernah dipakai untuk mail-merge (ADR-0019 revisi 2026-09-11).
 export async function handleUploadLaporanTemplate(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const form = await req.formData().catch(() => null);
   if (!form) return errorResponse(400, "Data tidak valid.");
@@ -82,9 +80,8 @@ export async function handleUploadLaporanTemplate(req: Request): Promise<Respons
 }
 
 export async function handleDeleteLaporanTemplate(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const row = getRow(ctx.user.id);
   if (!row) return errorResponse(404, "Belum ada template.");

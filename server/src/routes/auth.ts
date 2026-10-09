@@ -8,6 +8,7 @@ import {
   sessionCookie,
   SESSION_COOKIE,
 } from "../auth";
+import { requireLogin } from "../authz";
 import { errorResponse, json } from "../http";
 
 const loginSchema = z.object({
@@ -40,9 +41,8 @@ export function handleLogout(req: Request): Response {
 }
 
 export function handleMe(req: Request): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
   return json({ user: publicUser(ctx) });
 }
 

@@ -5,6 +5,7 @@ data/*.db-shm
 data/*.db-wal
 data/attachments/
 data/laporan-template/
+data/logs/
 .env
 .env.*
 !.env.example

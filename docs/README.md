@@ -60,7 +60,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0032 | [Timezone, cuti pribadi, dan tanggal histori](adr/0032-tanggal-bisnis.md) |
 | 0033 | [Satu akun dapat merangkap peran](adr/0033-rangkap-peran.md) |
 | 0034 | [Akses histori mengikuti hubungan aktif](adr/0034-akses-histori.md) |
-| 0035 | [Bun native tanpa framework/ORM](adr/0035-backend-framework.md) |
+| 0035 | [Bun native tanpa framework/ORM — direvisi ADR-0049](adr/0035-backend-framework.md) |
 | 0036 | [Skema fisik minimum Stage 1](adr/0036-skema-fisik-stage1.md) |
 | 0037 | [vee-validate+zod, TanStack Query, TanStack Table](adr/0037-library-frontend-tambahan.md) |
 | 0038 | [Login SSO via GitLab CE self-hosted](adr/0038-sso-gitlab.md) |
@@ -74,7 +74,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0046 | [Skema fisik untuk laporan bulanan PDF lengkap — digantikan ADR-0019](adr/0046-skema-fisik-laporan-template.md) |
 | 0047 | [Realisasi terisi dari commit GitLab lewat token personal](adr/0047-realisasi-dari-commit-gitlab.md) |
 | 0048 | [Logging aplikasi — file harian, rotasi ukuran, retensi mingguan](adr/0048-logging-aplikasi.md) |
-| 0049 | [Hono, Drizzle, dan PostgreSQL secara bertahap (usulan)](adr/0049-hono-drizzle-postgres.md) |
+| 0049 | [Hono, Drizzle, dan PostgreSQL secara bertahap](adr/0049-hono-drizzle-postgres.md) |
 
 ## Tahapan pekerjaan
 

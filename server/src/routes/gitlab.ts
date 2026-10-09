@@ -1,7 +1,9 @@
+import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
+import type { AuthContext } from "../types";
+import { errorMeta, log } from "../logger";
 import {
   fetchCommitsForDate,
   fetchGitlabIdentity,
@@ -12,7 +14,7 @@ import {
 
 const TANGGAL_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-function requireGitlabToken(ctx: NonNullable<ReturnType<typeof getAuthContext>>): string | Response {
+function requireGitlabToken(ctx: AuthContext): string | Response {
   if (!gitlabHostConfigured()) {
     return errorResponse(500, "Integrasi GitLab belum dikonfigurasi di server.");
   }
@@ -26,9 +28,8 @@ function requireGitlabToken(ctx: NonNullable<ReturnType<typeof getAuthContext>>)
 // Daftar repo GitLab yang bisa diakses token ini — dipilih user LEBIH DULU sebelum commit
 // di-fetch (lihat handleListGitlabCommits), supaya fetch commit gak perlu nge-loop semua repo.
 export async function handleListGitlabProjects(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const gitlabToken = requireGitlabToken(ctx);
   if (typeof gitlabToken !== "string") return gitlabToken;
@@ -36,7 +37,8 @@ export async function handleListGitlabProjects(req: Request): Promise<Response> 
   try {
     const projects = await fetchGitlabProjects(gitlabToken);
     return json({ projects });
-  } catch {
+  } catch (err) {
+    log("error", "Gagal mengambil daftar repo GitLab", { userId: ctx.user.id, ...errorMeta(err) });
     return errorResponse(502, "Gagal menghubungi GitLab, coba lagi.");
   }
 }
@@ -44,9 +46,8 @@ export async function handleListGitlabProjects(req: Request): Promise<Response> 
 // Lazy per tanggal+repo (ADR-0047) — dipanggil cuma setelah user pilih repo GitLab di modal
 // "Impor commit GitLab", bukan prefetch atau nge-loop semua repo yang bisa diakses.
 export async function handleListGitlabCommits(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const gitlabToken = requireGitlabToken(ctx);
   if (typeof gitlabToken !== "string") return gitlabToken;
@@ -80,7 +81,8 @@ export async function handleListGitlabCommits(req: Request): Promise<Response> {
     }
 
     return json({ commits: commits.map((c) => ({ ...c, alreadyImported: imported.has(c.sha) })) });
-  } catch {
+  } catch (err) {
+    log("error", "Gagal mengambil commit GitLab", { userId: ctx.user.id, gitlabProjectId, tanggal, ...errorMeta(err) });
     return errorResponse(502, "Gagal menghubungi GitLab, coba lagi.");
   }
 }
@@ -91,9 +93,8 @@ const saveTokenSchema = z.object({ token: z.string().min(1, "Token wajib diisi."
 // dicocokkan ke email akun yang login) — token yang gagal/invalid tidak pernah ditulis ke DB,
 // jadi kolom lama tidak ketiban token baru yang ternyata salah.
 export async function handleSaveGitlabToken(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   if (!gitlabHostConfigured()) {
     return errorResponse(500, "Integrasi GitLab belum dikonfigurasi di server.");
@@ -106,7 +107,10 @@ export async function handleSaveGitlabToken(req: Request): Promise<Response> {
   let identity;
   try {
     identity = await fetchGitlabIdentity(parsed.data.token);
-  } catch {
+  } catch (err) {
+    // Biasanya token salah (bukan error server), tetap dicatat level warn supaya kegagalan
+    // koneksi ke GitLab bisa dibedakan dari token salah saat ditelusuri.
+    log("warn", "Verifikasi token GitLab gagal", { userId: ctx.user.id, ...errorMeta(err) });
     return errorResponse(400, "Token GitLab tidak valid atau gagal terhubung.");
   }
 
