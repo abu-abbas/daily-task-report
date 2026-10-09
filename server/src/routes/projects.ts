@@ -1,8 +1,7 @@
 import { z } from "zod/v4";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { requireAdmin } from "../authz";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
+import { requireAdmin, requireLogin } from "../authz";
 
 interface ProjectRow {
   id: number;
@@ -105,9 +104,8 @@ export function handleListProjects(req: Request): Response {
 // Project yang diikuti user yang sedang login (keanggotaan aktif) — dipakai filter pilihan
 // project di sidebar, dan nantinya Stage 3 untuk mencatat pekerjaan (ADR-0005).
 export function handleListMyProjects(req: Request): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const rows = db
     .query<ProjectRow, [number]>(

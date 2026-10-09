@@ -1,6 +1,6 @@
 # ADR-0035: Bun native tanpa framework/ORM untuk backend
 
-- Status: diterima; diusulkan direvisi oleh [ADR-0049](0049-hono-drizzle-postgres.md).
+- Status: direvisi oleh [ADR-0049](0049-hono-drizzle-postgres.md) (Hono, Drizzle, PostgreSQL bertahap).
 - Tanggal: 2026-09-05.
 - Stage utama: [01](../stages/01-fondasi-akses.md).
 - Melengkapi: [ADR-0001](0001-stack-typescript.md), [ADR-0002](0002-database-sqlite.md), [ADR-0025](0025-metode-ponytail.md).

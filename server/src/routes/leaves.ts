@@ -1,7 +1,7 @@
+import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import { dalamBulanBerjalan, todayJakarta } from "../kalender";
 
 const TANGGAL_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -17,9 +17,8 @@ const saveLeaveSchema = z.object({
 // tetap null (tidak menghitung kuota cuti, di luar cakupan stage ini).
 // hariIniOverride: test-only, pola sama seperti handleSaveDailyInput di routes/task-logs.ts.
 export async function handleSaveLeave(req: Request, hariIniOverride?: string): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
   const userId = ctx.user.id;
 
   const body = await req.json().catch(() => null);
@@ -64,9 +63,8 @@ export async function handleSaveLeave(req: Request, hariIniOverride?: string): P
 }
 
 export async function handleCancelLeave(req: Request, tanggal: string): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   if (!TANGGAL_RE.test(tanggal)) return errorResponse(400, "Format tanggal tidak valid.");
 

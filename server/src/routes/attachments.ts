@@ -1,6 +1,6 @@
+import { requireLogin } from "../authz";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import {
   absoluteAttachmentPath,
   deleteAttachmentFile,
@@ -73,9 +73,8 @@ function getAttachmentOwner(attachmentId: number): number | null {
 // sudah dilakukan, bukan sesuatu yang nempel ke rencana yang belum dikerjakan. Boleh diunggah
 // kapan saja, tidak terikat jendela edit bulan berjalan (sama alasan resolve kendala).
 export async function handleUploadAttachment(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const form = await req.formData().catch(() => null);
   if (!form) return errorResponse(400, "Data tidak valid.");
@@ -118,9 +117,8 @@ export async function handleUploadAttachment(req: Request): Promise<Response> {
 }
 
 export async function handleDeleteAttachment(req: Request, id: number): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const ownerId = getAttachmentOwner(id);
   if (ownerId === null) return errorResponse(404, "Lampiran tidak ditemukan.");
@@ -133,9 +131,8 @@ export async function handleDeleteAttachment(req: Request, id: number): Promise<
 }
 
 export async function handleGetAttachmentFile(req: Request, id: number): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const ownerId = getAttachmentOwner(id);
   if (ownerId === null) return errorResponse(404, "Lampiran tidak ditemukan.");

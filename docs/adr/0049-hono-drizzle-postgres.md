@@ -1,6 +1,6 @@
 # ADR-0049: Hono, Drizzle, dan PostgreSQL secara bertahap
 
-- Status: diusulkan; menunggu review pengguna sebelum tahap 1 dikerjakan.
+- Status: diterima (PR #1 di-merge 2026-10-09). Tahap 1 dikerjakan; tahap 2 dan 3 belum.
 - Tanggal: 2026-10-09.
 - Stage utama: lintas stage (infrastruktur backend), tidak terikat satu stage fitur.
 - Merevisi: [ADR-0035](0035-backend-framework.md) (tanpa framework/ORM) dan [ADR-0002](0002-database-sqlite.md) (SQLite, "PostgreSQL bukan cakupan saat ini").
@@ -52,6 +52,14 @@ Kondisi kode per 2026-10-09 (diperiksa langsung, bukan asumsi):
 - Skrip sekali jalan untuk menyalin data dari `data/app.db` ke Postgres, dengan pemeriksaan jumlah baris per tabel sebelum dan sesudah.
 - Test memakai database Postgres (database/schema terpisah per run).
 - Attachment dan template Word tetap di disk (`data/attachments/`, `data/laporan-template/`); hanya metadata yang ada di database.
+
+### Catatan pelaksanaan tahap 1 (2026-10-09)
+
+- Route didaftarkan di `server/src/app.ts`; `server/src/index.ts` tinggal menjalankan migration, pruning log, dan `Bun.serve({ fetch: app.fetch })`.
+- Guard `loginRequired`/`adminOnly` dipasang per route. Handler tetap memanggil `requireLogin`/`requireAdmin` (`server/src/authz.ts`) sebagai pertahanan berlapis dan supaya 184 test unit yang memanggil handler langsung tetap berlaku tanpa ditulis ulang. Sesi tetap cuma di-query sekali per request karena hasilnya di-cache per objek `Request`.
+- Pola tiga baris `parseCookie` + `getAuthContext` + 401 yang diulang di 29 handler diganti satu panggilan `requireLogin(req)`.
+- Logger ADR-0048 ada di `server/src/logger.ts`; middleware mencatat response 5xx dan `app.onError` mencatat exception tak tertangani beserta stack trace.
+- Validasi `@hono/zod-validator` belum dipasang; validasi zod di dalam handler tetap seperti sebelumnya.
 
 ## Konsekuensi
 

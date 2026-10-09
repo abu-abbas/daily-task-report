@@ -1,6 +1,6 @@
+import { requireLogin } from "../authz";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import { dalamBulanBerjalan, todayJakarta } from "../kalender";
 import { attachmentsByTaskLogId, kendalaByTaskLogId } from "./task-logs";
 
@@ -37,9 +37,8 @@ function rentangHeatmap(hariIni: string): { dari: string; sampai: string } {
 // RiwayatView.vue sebagai satu-satunya ringkasan; klik kotak baru fetch detail lewat
 // handleGetRiwayatDetail di bawah.
 export function handleGetActivityHeatmap(req: Request, hariIniOverride?: string): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const projectIdParam = url.searchParams.get("projectId");
@@ -95,9 +94,8 @@ const TANGGAL_FILTER_LIMIT = 200;
 //   Dialog langsung — hindari dua jalur "lihat detail" yang tumpang tindih); tidak dipaginasi,
 //   `cursor` diabaikan kalau `tanggal` ada.
 export function handleListActivityLog(req: Request): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const projectIdParam = url.searchParams.get("projectId");
@@ -147,9 +145,8 @@ export function handleListActivityLog(req: Request): Response {
 }
 
 export function handleGetRiwayatDetail(req: Request, tanggal: string, hariIniOverride?: string): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   if (!TANGGAL_RE.test(tanggal)) return errorResponse(400, "Format tanggal tidak valid.");
 

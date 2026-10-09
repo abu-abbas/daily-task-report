@@ -1,6 +1,6 @@
 # ADR-0048: Logging aplikasi — file harian, rotasi ukuran, retensi mingguan
 
-- Status: diterima; rincian implementasi dicatat di bawah, belum dikerjakan.
+- Status: diterima; diimplementasikan 2026-10-09 bersama tahap 1 [ADR-0049](0049-hono-drizzle-postgres.md) (`server/src/logger.ts`). Hook global memakai `app.onError` milik Hono, bukan hook `error` milik `Bun.serve`.
 - Tanggal: 2026-09-19.
 - Stage utama: lintas stage (infrastruktur operasional), tidak terikat satu stage fitur.
 

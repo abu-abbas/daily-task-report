@@ -1,8 +1,7 @@
 import { z } from "zod/v4";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { requireAdmin } from "../authz";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
+import { requireAdmin, requireLogin } from "../authz";
 
 interface HolidayRow {
   id: number;
@@ -29,9 +28,8 @@ const holidayPayloadSchema = z.object({
 // Baca daftar libur tidak dibatasi admin — dipakai semua user untuk penelusuran hari
 // kerja sebelumnya (ADR-0006/ADR-0026) begitu Stage 3 dibangun, bukan cuma untuk admin.
 export function handleListHolidays(req: Request): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const rows = db
     .query<HolidayRow, []>(

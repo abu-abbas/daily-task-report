@@ -1,7 +1,7 @@
+import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 
 interface KendalaRow {
   id: number;
@@ -44,9 +44,8 @@ const createSchema = z.object({
 
 // Kendala cuma untuk log realisasi (ADR-0015) — muncul saat mengerjakan, bukan saat merencanakan.
 export async function handleCreateKendala(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
@@ -67,9 +66,8 @@ export async function handleCreateKendala(req: Request): Promise<Response> {
 // Resolve satu arah (tidak ada reopen, YAGNI, konsisten ADR-0045) dan boleh kapan saja, tidak
 // terikat jendela edit bulan berjalan (ADR-0009) — cuma ubah status, bukan isi laporan historis.
 export async function handleResolveKendala(req: Request, id: number): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const ownerId = getKendalaOwner(id);
   if (ownerId === null) return errorResponse(404, "Kendala tidak ditemukan.");
@@ -83,9 +81,8 @@ export async function handleResolveKendala(req: Request, id: number): Promise<Re
 }
 
 export async function handleDeleteKendala(req: Request, id: number): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const ownerId = getKendalaOwner(id);
   if (ownerId === null) return errorResponse(404, "Kendala tidak ditemukan.");

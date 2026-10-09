@@ -1,7 +1,7 @@
+import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import { dalamBulanBerjalan, previousWorkday, realisasiTanggalDiizinkan, todayJakarta } from "../kalender";
 import { isActiveProjectMember } from "./projects";
 import { deleteAttachmentsByTaskLogIds } from "./attachments";
@@ -84,9 +84,8 @@ const TANGGAL_RE = /^\d{4}-\d{2}-\d{2}$/;
 // argumen ini, selalu memakai todayJakarta() sungguhan. tanggal (laporan yang dilihat/diisi)
 // datang dari klien lewat query string — bisa backdate dalam bulan berjalan (ADR-0008/0009).
 export function handleGetDailyInput(req: Request, hariIniOverride?: string): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const hariIni = hariIniOverride ?? todayJakarta();
   const tanggalParam = new URL(req.url).searchParams.get("tanggal");
@@ -294,9 +293,10 @@ function validasiRealisasiDiizinkan(
 }
 
 export async function handleSaveDailyInput(req: Request, hariIniOverride?: string): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  // Variabel terpisah supaya hasil narrowing tetap terbawa ke closure transaksi di bawah.
+  const auth = requireLogin(req);
+  if (auth instanceof Response) return auth;
+  const ctx = auth;
 
   const body = await req.json().catch(() => null);
   const parsed = saveInputSchema.safeParse(body);

@@ -1,7 +1,7 @@
+import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import { isActiveProjectMember } from "./projects";
 
 interface TaskRow {
@@ -33,9 +33,8 @@ function getTask(taskId: number): TaskRow | null {
 // Task tidak punya pemilik tetap (ADR-0010); dibaca-tulis siapa pun anggota aktif project-nya
 // (ADR-0005) — bukan cuma admin, karena ini bagian pengisian kerja tenaga ahli sehari-hari.
 export function handleListTasks(req: Request): Response {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const projectId = Number(url.searchParams.get("projectId"));
@@ -61,9 +60,8 @@ const createTaskSchema = z.object({
 });
 
 export async function handleCreateTask(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const body = await req.json().catch(() => null);
   const parsed = createTaskSchema.safeParse(body);
@@ -91,9 +89,8 @@ const closeTaskSchema = z.object({
 // awal) — menutup task berarti pekerjaan yang direncanakan dianggap selesai/terealisasi, bukan
 // batal begitu saja; deskripsi penutupan dipakai sebagai catatan hasilnya.
 export async function handleCloseTask(req: Request, taskId: number): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const body = await req.json().catch(() => ({}));
   const parsed = closeTaskSchema.safeParse(body);

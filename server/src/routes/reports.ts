@@ -1,6 +1,6 @@
+import { requireLogin } from "../authz";
 import { db } from "../db";
 import { errorResponse, json } from "../http";
-import { getAuthContext, parseCookie, SESSION_COOKIE } from "../auth";
 import { isWorkday, todayJakarta } from "../kalender";
 import { absoluteAttachmentPath } from "../storage";
 import { buildMonthlyReportPdf, catatanToLines, type ReportAktivitasRow, type ReportHari, type ReportLampiran, type ReportTask } from "../report-pdf";
@@ -184,9 +184,8 @@ async function buildLampiranDanAktivitas(
 // Cicilan awal Stage 7 (ADR-0019) — laporan PDF generik satu layout, tanpa template Word (itu
 // masih menunggu Q-06). Cakupan diri-sendiri saja, sama seperti Riwayat.
 export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const bulan = url.searchParams.get("bulan");
@@ -224,9 +223,8 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
 // file template masing-masing orang; di sini cuma isi placeholder nama/timesheet/tabel
 // aktifitas/lampiran/saran. Tidak ada gate — saran kosong cukup dirender kosong.
 export async function handleMonthlyReportWord(req: Request): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const bulan = url.searchParams.get("bulan");
@@ -286,9 +284,8 @@ export async function handleMonthlyReportWord(req: Request): Promise<Response> {
 // Pratinjau di layar sebelum cetak (ADR-0019 "Rencana lanjutan") — supaya user bisa mengecek ada
 // tidaknya hari kerja yang masih kosong (belum ada realisasi) sebelum benar-benar mengunduh PDF.
 export async function handleMonthlyReportPreview(req: Request, hariIniOverride?: string): Promise<Response> {
-  const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  const ctx = getAuthContext(token);
-  if (!ctx) return errorResponse(401, "Belum login.");
+  const ctx = requireLogin(req);
+  if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const bulan = url.searchParams.get("bulan");
