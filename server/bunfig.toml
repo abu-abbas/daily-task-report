@@ -1,0 +1,4 @@
+[test]
+# Menyiapkan database Postgres khusus test dan folder data sementara sebelum file test mana pun
+# meng-import src/db (ADR-0049 tahap 3).
+preload = ["./tests/setup.ts"]

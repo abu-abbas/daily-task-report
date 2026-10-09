@@ -1,17 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-// DATABASE_PATH harus di-set sebelum src/db di-import (module top-level membaca env sekali).
-// Paksa timpa (bukan ??=): kalau server/.env kebetulan sudah men-set DATABASE_PATH, biarpun
-// itu dimuat otomatis oleh Bun sebelum baris ini jalan, test tetap wajib pakai db temp sendiri
-// — bukan diam-diam jatuh ke db development beneran.
-// "../src/db" adalah singleton ESM yang dibagi lintas file test dalam satu proses "bun test",
-// jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini.
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { handleListHolidays, handleCreateHoliday, handleDeleteHoliday } = await import(
   "../src/routes/holidays"
@@ -25,24 +15,24 @@ let adminToken: string;
 let tenagaToken: string;
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Holidays",
     ADMIN_EMAIL,
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     ADMIN_EMAIL,
   );
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Tenaga Holidays",
     TENAGA_EMAIL,
     hash,
   );
-  db.query(
+  await db.query(
     "INSERT INTO user_roles (user_id, role) SELECT id, 'tenaga_ahli' FROM users WHERE email = ?",
   ).run(TENAGA_EMAIL);
 

@@ -1,12 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import PizZip from "pizzip";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations, storageDir } = await import("../src/db");
+const { runMigrations, storageDir } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { handleGetMyLaporanTemplate, handleUploadLaporanTemplate, handleDeleteLaporanTemplate, getLaporanTemplatePath } =
   await import("../src/routes/laporan-template");
@@ -40,13 +37,13 @@ let tenagaId: number;
 let tenagaToken: string;
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
-  const tenaga = db
+  const tenaga = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Template", TENAGA_EMAIL, hash);
   tenagaId = Number(tenaga.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
   tenagaToken = (await login(TENAGA_EMAIL, PASSWORD))!.token;
 });
 
@@ -109,7 +106,7 @@ describe("POST /api/laporan-template", () => {
     const res = await handleUploadLaporanTemplate(reqUpload(tenagaToken, file));
     expect(res.status).toBe(201);
 
-    const rows = db.query("SELECT COUNT(*) as c FROM laporan_template WHERE user_id = ?").get(tenagaId) as { c: number };
+    const rows = await db.query("SELECT COUNT(*)::int as c FROM laporan_template WHERE user_id = ?").get(tenagaId) as { c: number };
     expect(rows.c).toBe(1);
 
     const getRes = await handleGetMyLaporanTemplate(req("GET", "/api/laporan-template", tenagaToken));

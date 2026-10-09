@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleCreateTask } = await import("../src/routes/tasks");
@@ -42,27 +38,27 @@ function req(method: string, path: string, token?: string, body?: unknown): Requ
 }
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
 
-  const tenagaResult = db
+  const tenagaResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Logs", TENAGA_EMAIL, hash);
   tenagaId = Number(tenagaResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
 
-  const rekanResult = db
+  const rekanResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Rekan Logs", REKAN_EMAIL, hash);
   rekanId = Number(rekanResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(rekanId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(rekanId);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Logs",
     "admin.logs@example.test",
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     "admin.logs@example.test",
   );
   const adminToken = (await login("admin.logs@example.test", PASSWORD))!.token;
@@ -119,7 +115,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
       HARI_A,
     );
     expect(res.status).toBe(400);
-    const row = db
+    const row = await db
       .query("SELECT id FROM task_logs WHERE user_id = ? AND task_id = ?")
       .get(tenagaId, taskXId);
     expect(row).toBeNull();
@@ -187,7 +183,7 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   });
 
   test("Task Y yang tidak dicentang tidak menghasilkan realisasi", async () => {
-    const row = db
+    const row = await db
       .query("SELECT id FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
       .get(tenagaId, taskYId, HARI_A);
     expect(row).toBeNull();
@@ -211,7 +207,7 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
       }),
       HARI_B,
     );
-    const rows = db
+    const rows = await db
       .query("SELECT catatan FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
       .all(tenagaId, taskXId, HARI_A) as { catatan: string }[];
     expect(rows.length).toBe(1);
@@ -227,10 +223,10 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
     );
     expect(res.status).toBe(200);
 
-    const tenagaRow = db
+    const tenagaRow = await db
       .query("SELECT catatan FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
       .get(tenagaId, taskXId, HARI_A) as { catatan: string };
-    const rekanRow = db
+    const rekanRow = await db
       .query("SELECT catatan FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
       .get(rekanId, taskXId, HARI_A) as { catatan: string };
     expect(tenagaRow.catatan).toBe("Task X beres (revisi)");
@@ -242,7 +238,7 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
 // item itu harus menghapus barisnya, bukan membiarkannya nyangkut (Q-05).
 describe("Efek uncheck (ADR-0044)", () => {
   test("submit ulang Hari B tanpa realisasi Task X menghapus baris lamanya", async () => {
-    const before = db
+    const before = await db
       .query("SELECT id FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
       .get(tenagaId, taskXId, HARI_A);
     expect(before).not.toBeNull();
@@ -255,7 +251,7 @@ describe("Efek uncheck (ADR-0044)", () => {
     );
     expect(res.status).toBe(200);
 
-    const after = db
+    const after = await db
       .query("SELECT id FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
       .get(tenagaId, taskXId, HARI_A);
     expect(after).toBeNull();
@@ -292,22 +288,22 @@ describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
     );
     expect(res.status).toBe(200);
 
-    const project = db
+    const project = await db
       .query<{ id: number; belum_direkonsiliasi: number }, [string]>(
         "SELECT id, belum_direkonsiliasi FROM projects WHERE nama = ?",
       )
       .get("SI-Uji ProjectBaru");
     expect(project?.belum_direkonsiliasi).toBe(1);
 
-    const membership = db
+    const membership = await db
       .query("SELECT ended_at FROM user_project WHERE user_id = ? AND project_id = ?")
       .get(tenagaId, project!.id) as { ended_at: string | null };
     expect(membership?.ended_at).toBeNull();
 
-    const task = db
+    const task = await db
       .query("SELECT id FROM tasks WHERE project_id = ? AND deskripsi = ?")
       .get(project!.id, "Setup awal") as { id: number };
-    const log = db
+    const log = await db
       .query("SELECT catatan FROM task_logs WHERE task_id = ? AND user_id = ?")
       .get(task.id, tenagaId) as { catatan: string };
     expect(log.catatan).toBe("mulai setup");
@@ -329,7 +325,7 @@ describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
     );
     expect(res.status).toBe(400);
 
-    const project = db.query("SELECT id FROM projects WHERE nama = ?").get("SI-Uji Batal");
+    const project = await db.query("SELECT id FROM projects WHERE nama = ?").get("SI-Uji Batal");
     expect(project).toBeNull();
   });
 
@@ -350,7 +346,7 @@ describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
     );
     expect(res.status).toBe(400);
 
-    const project = db.query("SELECT id FROM projects WHERE nama = ?").get("SI-Uji Gabungan");
+    const project = await db.query("SELECT id FROM projects WHERE nama = ?").get("SI-Uji Gabungan");
     expect(project).toBeNull();
   });
 });
@@ -436,7 +432,7 @@ describe("Konflik dengan izin (ADR-0014)", () => {
   const HARI_LAPORAN = "2026-10-13"; // Selasa, previousWorkday = HARI_IZIN
 
   test("realisasi ditolak (409) kalau hari kerja sebelumnya sudah tercatat izin", async () => {
-    db.query("INSERT INTO leaves (user_id, tanggal, jenis) VALUES (?, ?, 'sakit')").run(tenagaId, HARI_IZIN);
+    await db.query("INSERT INTO leaves (user_id, tanggal, jenis) VALUES (?, ?, 'sakit')").run(tenagaId, HARI_IZIN);
 
     const res = await handleSaveDailyInput(
       req("POST", "/api/task-logs", tenagaToken, {

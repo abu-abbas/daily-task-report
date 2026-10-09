@@ -1,6 +1,6 @@
 import { requireLogin } from "../authz";
 import { and, asc, count, desc, eq, gte, lt, lte, or } from "drizzle-orm";
-import { db } from "../db";
+import { db, first } from "../db";
 import { leaves, projects, taskLogs, tasks } from "../schema";
 import { errorResponse, json } from "../http";
 import { dalamBulanBerjalan, todayJakarta } from "../kalender";
@@ -205,7 +205,7 @@ export async function handleGetRiwayatDetail(
     .select({ jenis: leaves.jenis, alasan: leaves.alasan })
     .from(leaves)
     .where(and(eq(leaves.user_id, ctx.user.id), eq(leaves.tanggal, tanggal)))
-    .get();
+    .then(first);
 
   const hariIni = hariIniOverride ?? todayJakarta();
   const bolehEdit = dalamBulanBerjalan(tanggal, hariIni);

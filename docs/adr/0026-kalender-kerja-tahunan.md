@@ -23,5 +23,5 @@ Hari kerja sebelumnya (ADR-0006) dan ambang 5 hari kerja task nyangkut memakai a
 - Tidak ada lagi tabel bervolume satu baris per tanggal, tidak ada proses "generate tahun", dan tidak ada keadaan "kalender belum lengkap" — aturan di atas selalu punya jawaban untuk tanggal berapa pun karena Senin-Jumat/Sabtu-Minggu dihitung langsung dari tanggal. Ini menggantikan mekanisme blok submit pada [ADR-0028](0028-pengelolaan-kalender.md).
 - Admin hanya menambah/mengubah/menghapus baris `holidays`; tidak ada langkah wajib "isi kalender tahun depan".
 - Karena Sabtu-Minggu tidak pernah bisa dijadikan hari kerja, kebutuhan "hari kerja khusus di akhir pekan" dari draf awal dihapus dari cakupan; jika suatu saat dibutuhkan, ini jadi keputusan baru terpisah, bukan bagian dari ADR ini.
-- DDL final: tabel `holidays` (`id`, `nama`, `tanggal_mulai`, `tanggal_akhir`) di [`schema/0001_initial.sql`](../schema/0001_initial.sql); lihat [ADR-0036](0036-skema-fisik-stage1.md).
+- DDL final: tabel `holidays` (`id`, `nama`, `tanggal_mulai`, `tanggal_akhir`) di [`schema/sqlite-arsip/0001_initial.sql`](../schema/sqlite-arsip/0001_initial.sql); lihat [ADR-0036](0036-skema-fisik-stage1.md).
 - Tidak mengasumsikan integrasi API libur eksternal; admin input manual.

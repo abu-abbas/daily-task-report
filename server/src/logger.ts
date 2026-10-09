@@ -5,7 +5,7 @@ import { todayJakarta } from "./kalender";
 
 // Logging aplikasi (ADR-0048): JSON Lines per hari (tanggal Asia/Jakarta), rotasi ukuran sebagai
 // pengaman, retensi N hari. Modul sendiri tanpa library, mengikuti pola storage.ts. Folder
-// diturunkan dari storageDir (bukan dataDir) supaya test yang override DATABASE_PATH ke tmpdir
+// diturunkan dari storageDir supaya test yang mengarahkan DATA_DIR ke tmpdir
 // otomatis mengisolasi file log juga.
 export type LogLevel = "error" | "warn" | "info";
 

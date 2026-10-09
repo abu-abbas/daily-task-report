@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleCreateTask } = await import("../src/routes/tasks");
@@ -42,21 +38,21 @@ function req(method: string, path: string, token?: string, body?: unknown): Requ
 }
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
 
-  const tenagaResult = db
+  const tenagaResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Riwayat", TENAGA_EMAIL, hash);
   tenagaId = Number(tenagaResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Riwayat",
     "admin.riwayat@example.test",
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     "admin.riwayat@example.test",
   );
   const adminToken = (await login("admin.riwayat@example.test", PASSWORD))!.token;
@@ -113,18 +109,18 @@ describe("GET /api/activity-heatmap", () => {
     // Seed dipakai bareng describe detail di bawah: satu realisasi di tanggal 05 (taskAId), satu
     // rencana di tanggal 06 -- sengaja cuma satu baris di tanggal 05 supaya query .get() di test
     // detail tetap unik. Kasus ">1 log tanggal sama" dites terpisah di tanggal 03.
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', 'Beres')",
     ).run(taskAId, tenagaId, `${BULAN}-05`);
-    db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, ?, 'rencana')").run(
+    await db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, ?, 'rencana')").run(
       taskAId,
       tenagaId,
       `${BULAN}-06`,
     );
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', 'Dua kali 1')",
     ).run(taskAId, tenagaId, `${BULAN}-03`);
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan, is_extra) VALUES (?, ?, ?, 'realisasi', 'Dua kali 2', 1)",
     ).run(taskAId, tenagaId, `${BULAN}-03`);
 
@@ -142,7 +138,7 @@ describe("GET /api/activity-heatmap", () => {
   });
 
   test("filter projectId cuma hitung realisasi task project itu", async () => {
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', 'Punya project B')",
     ).run(taskBId, tenagaId, `${BULAN}-07`);
 
@@ -164,7 +160,7 @@ describe("GET /api/activity-heatmap", () => {
   });
 
   test("tanggal di luar rentang 12 bulan tidak ikut kehitung", async () => {
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2024-01-10', 'realisasi', 'Terlalu lama')",
     ).run(taskAId, tenagaId);
 
@@ -178,11 +174,11 @@ describe("GET /api/activity-heatmap", () => {
   });
 
   test("data user lain tidak ikut kebawa (isolasi per user)", async () => {
-    const lainResult = db
+    const lainResult = await db
       .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
       .run("User Lain Riwayat", "lain.riwayat@example.test", "x");
     const lainId = Number(lainResult.lastInsertRowid);
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', 'Punya orang lain')",
     ).run(taskAId, lainId, `${BULAN}-20`);
 
@@ -205,7 +201,7 @@ describe("GET /api/activity-log", () => {
     // Tidak dibatasi rentang heatmap (beda dari activity-heatmap) — sengaja tambah banyak log
     // biar total > 20, supaya paginasi sungguhan teruji, bukan cuma satu halaman kebetulan cukup.
     for (let i = 0; i < 30; i++) {
-      db.query(
+      await db.query(
         "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', ?)",
       ).run(taskAId, tenagaId, `2026-06-${String((i % 28) + 1).padStart(2, "0")}`, `Log paginasi ${i}`);
     }
@@ -287,14 +283,14 @@ describe("GET /api/history/:tanggal", () => {
   });
 
   test("item realisasi bawa kendala+attachment yang benar, item rencana kosong keduanya", async () => {
-    const realisasiLogId = db
+    const realisasiLogId = await db
       .query("SELECT id FROM task_logs WHERE task_id = ? AND user_id = ? AND tanggal = ? AND jenis = 'realisasi'")
       .get(taskAId, tenagaId, `${BULAN}-05`) as { id: number };
-    db.query("INSERT INTO kendala (task_log_id, deskripsi, status) VALUES (?, ?, 'open')").run(
+    await db.query("INSERT INTO kendala (task_log_id, deskripsi, status) VALUES (?, ?, 'open')").run(
       realisasiLogId.id,
       "Nunggu review",
     );
-    db.query(
+    await db.query(
       "INSERT INTO attachments (attachable_type, attachable_id, file_path, file_type, nama_asli, ukuran_bytes, uploaded_by) VALUES ('task_log', ?, 'attachments/x.jpg', 'image/jpeg', 'bukti.jpg', 100, ?)",
     ).run(realisasiLogId.id, tenagaId);
 
@@ -317,7 +313,7 @@ describe("GET /api/history/:tanggal", () => {
   });
 
   test("izin tampil di detail", async () => {
-    db.query("INSERT INTO leaves (user_id, tanggal, jenis) VALUES (?, ?, 'sakit')").run(tenagaId, `${BULAN}-10`);
+    await db.query("INSERT INTO leaves (user_id, tanggal, jenis) VALUES (?, ?, 'sakit')").run(tenagaId, `${BULAN}-10`);
 
     const res = await handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-10`, tenagaToken), `${BULAN}-10`);
     const body = (await res.json()) as { izin: { jenis: string } | null };

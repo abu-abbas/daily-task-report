@@ -1,6 +1,6 @@
 # ADR-0002: SQLite untuk tahap awal
 
-- Status: diterima; rincian terbuka dicatat di bawah.
+- Status: digantikan oleh [ADR-0049](0049-hono-drizzle-postgres.md) (pindah ke PostgreSQL, tahap 3).
 - Tanggal: 2026-09-05.
 - Stage utama: [01](../stages/01-fondasi-akses.md).
 

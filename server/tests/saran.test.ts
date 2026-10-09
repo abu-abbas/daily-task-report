@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { handleGetSaran, handleSaveSaran, isSaranTerisi } = await import("../src/routes/saran");
 
@@ -15,13 +11,13 @@ let tenagaId: number;
 let tenagaToken: string;
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
-  const tenaga = db
+  const tenaga = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Saran", TENAGA_EMAIL, hash);
   tenagaId = Number(tenaga.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
   tenagaToken = (await login(TENAGA_EMAIL, PASSWORD))!.token;
 });
 

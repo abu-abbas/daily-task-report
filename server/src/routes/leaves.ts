@@ -1,7 +1,7 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { and, eq } from "drizzle-orm";
-import { db } from "../db";
+import { db, first } from "../db";
 import { leaves, taskLogs } from "../schema";
 import { errorResponse, json } from "../http";
 import { dalamBulanBerjalan, todayJakarta } from "../kalender";
@@ -39,29 +39,28 @@ export async function handleSaveLeave(req: Request, hariIniOverride?: string): P
     .select({ id: taskLogs.id })
     .from(taskLogs)
     .where(and(eq(taskLogs.user_id, userId), eq(taskLogs.tanggal, tanggal), eq(taskLogs.jenis, "realisasi")))
-    .get();
+    .then(first);
   if (realisasiBentrok) {
     return errorResponse(409, "Tanggal itu sudah punya realisasi tersimpan, tidak bisa jadi izin/cuti/sakit.");
   }
 
-  // Callback transaksi sinkron (.get/.run), lihat catatan di routes/users.ts.
-  db.transaction((tx) => {
-    const existing = tx
+  await db.transaction(async (tx) => {
+    const existing = await tx
       .select({ id: leaves.id })
       .from(leaves)
       .where(and(eq(leaves.user_id, userId), eq(leaves.tanggal, tanggal)))
-      .get();
+      .then(first);
     if (existing) {
-      tx.update(leaves).set({ jenis, alasan }).where(eq(leaves.id, existing.id)).run();
+      await tx.update(leaves).set({ jenis, alasan }).where(eq(leaves.id, existing.id));
     } else {
-      tx.insert(leaves).values({ user_id: userId, tanggal, jenis, alasan, potong_cuti_tahunan: null }).run();
+      await tx.insert(leaves).values({ user_id: userId, tanggal, jenis, alasan, potong_cuti_tahunan: null });
     }
     // Rencana yang sudah tersimpan di tanggal ini otomatis dihapus — izin dan rencana tidak
     // boleh coexist di tanggal yang sama (keputusan produk, melengkapi ADR-0014 yang eksplisit
     // baru menyebut realisasi).
-    tx.delete(taskLogs)
-      .where(and(eq(taskLogs.user_id, userId), eq(taskLogs.tanggal, tanggal), eq(taskLogs.jenis, "rencana")))
-      .run();
+    await tx
+      .delete(taskLogs)
+      .where(and(eq(taskLogs.user_id, userId), eq(taskLogs.tanggal, tanggal), eq(taskLogs.jenis, "rencana")));
   });
 
   return json({ tanggal, jenis, alasan });

@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import { asc, eq } from "drizzle-orm";
-import { db } from "../db";
+import { db, first } from "../db";
 import { holidays } from "../schema";
 import { errorResponse, json } from "../http";
 import { requireAdmin, requireLogin } from "../authz";
@@ -65,7 +65,7 @@ export async function handleDeleteHoliday(req: Request, id: number): Promise<Res
   if (ctx instanceof Response) return ctx;
 
   if (!Number.isInteger(id)) return errorResponse(400, "ID tidak valid.");
-  const existing = await db.select({ id: holidays.id }).from(holidays).where(eq(holidays.id, id)).get();
+  const existing = await db.select({ id: holidays.id }).from(holidays).where(eq(holidays.id, id)).then(first);
   if (!existing) return errorResponse(404, "Data libur tidak ditemukan.");
 
   await db.delete(holidays).where(eq(holidays.id, id));

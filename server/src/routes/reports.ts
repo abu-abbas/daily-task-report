@@ -1,5 +1,5 @@
 import { requireLogin } from "../authz";
-import { and, asc, eq, inArray, like } from "drizzle-orm";
+import { and, asc, between, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { attachments, leaves, projects, taskLogs, tasks as tasksTable } from "../schema";
 import { errorResponse, json } from "../http";
@@ -26,6 +26,11 @@ const BULAN_SAJA_FMT = new Intl.DateTimeFormat("id-ID", { month: "long", timeZon
 function bulanSajaLabel(bulan: string): string {
   const [tahun, bulanAngka] = bulan.split("-").map(Number);
   return BULAN_SAJA_FMT.format(new Date(Date.UTC(tahun!, bulanAngka! - 1, 1)));
+}
+
+// Rentang tanggal satu bulan untuk filter kolom date ("YYYY-MM-01".."YYYY-MM-akhir").
+function rentangBulan(bulan: string): [string, string] {
+  return [`${bulan}-01`, `${bulan}-${String(daysInMonth(bulan)).padStart(2, "0")}`];
 }
 
 function daysInMonth(bulan: string): number {
@@ -89,7 +94,7 @@ async function aggregateMonthlyReport(userId: number, bulan: string): Promise<Ag
     .from(taskLogs)
     .innerJoin(tasksTable, eq(tasksTable.id, taskLogs.task_id))
     .innerJoin(projects, eq(projects.id, tasksTable.project_id))
-    .where(and(eq(taskLogs.user_id, userId), eq(taskLogs.jenis, "realisasi"), like(taskLogs.tanggal, `${bulan}%`)))
+    .where(and(eq(taskLogs.user_id, userId), eq(taskLogs.jenis, "realisasi"), between(taskLogs.tanggal, ...rentangBulan(bulan))))
     .orderBy(asc(taskLogs.tanggal), asc(tasksTable.id));
 
   // Nomor task tetap (dipakai ulang di timesheet dan tabel aktifitas) — urutan kemunculan
@@ -125,7 +130,7 @@ async function aggregateMonthlyReport(userId: number, bulan: string): Promise<Ag
   const izinRows = await db
     .select({ tanggal: leaves.tanggal })
     .from(leaves)
-    .where(and(eq(leaves.user_id, userId), like(leaves.tanggal, `${bulan}%`)));
+    .where(and(eq(leaves.user_id, userId), between(leaves.tanggal, ...rentangBulan(bulan))));
   const izinSet = new Set(izinRows.map((r) => r.tanggal));
 
   const hari: ReportHari[] = [];

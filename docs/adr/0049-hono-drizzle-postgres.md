@@ -1,6 +1,6 @@
 # ADR-0049: Hono, Drizzle, dan PostgreSQL secara bertahap
 
-- Status: diterima (PR #1 di-merge 2026-10-09). Tahap 1 dan 2 dikerjakan; tahap 3 belum.
+- Status: diterima (PR #1 di-merge 2026-10-09). Tahap 1, 2, dan 3 dikerjakan.
 - Tanggal: 2026-10-09.
 - Stage utama: lintas stage (infrastruktur backend), tidak terikat satu stage fitur.
 - Merevisi: [ADR-0035](0035-backend-framework.md) (tanpa framework/ORM) dan [ADR-0002](0002-database-sqlite.md) (SQLite, "PostgreSQL bukan cakupan saat ini").
@@ -70,6 +70,18 @@ Kondisi kode per 2026-10-09 (diperiksa langsung, bukan asumsi):
 - Logger ADR-0048 ada di `server/src/logger.ts`; middleware mencatat response 5xx dan `app.onError` mencatat exception tak tertangani beserta stack trace.
 - Validasi `@hono/zod-validator` belum dipasang; validasi zod di dalam handler tetap seperti sebelumnya.
 
+### Catatan pelaksanaan tahap 3 (2026-10-09)
+
+- **Driver: `Bun.sql`** (client Postgres bawaan Bun) lewat `drizzle-orm/bun-sql`, bukan `postgres.js`: tanpa dependency tambahan, dan rollback transaksi async, `RETURNING`, serta kode error UNIQUE sudah dicoba langsung sebelum dipilih. Koneksi dari `DATABASE_URL`.
+- **Migration**: `schema.ts` (pg-core) menjadi sumber skema. `bun run db:generate` (drizzle-kit) menulis migration ke `docs/schema/postgres/`, dimulai dari `0000_baseline.sql`; `bun run migrate` dan startup server menjalankannya lewat migrator Drizzle (tabel `drizzle.__drizzle_migrations`). Migration SQLite `0001`–`0009` dipindah ke `docs/schema/sqlite-arsip/` dan tidak dijalankan lagi.
+- **Tipe kolom**: id `GENERATED ALWAYS AS IDENTITY`; waktu teknis `timestamptz`; tanggal bisnis `date` yang dibaca/ditulis sebagai string `YYYY-MM-DD` (tidak lewat konversi zona waktu). CHECK constraint dari SQLite dipertahankan.
+- **Menyimpang dari rencana: flag 0/1 tetap `integer`, bukan `boolean`.** `is_active`, `is_extra`, `belum_direkonsiliasi` dipakai sebagai angka 0/1 di API, frontend, dan kode laporan; mengubahnya ke `boolean` menambah perubahan di semua lapisan tanpa manfaat fungsional. CHECK `IN (0, 1)` menjaga nilainya. Bisa diubah lewat migration terpisah bila nanti diperlukan.
+- **Transaksi menjadi async** (`await db.transaction(async (tx) => ...)`) di semua 7 transaksi tahap 2. `activateMembership` (tambah anggota/gabung project) sekarang satu upsert `ON CONFLICT (user_id, project_id) DO UPDATE`, karena cek-lalu-tulis di Postgres (READ COMMITTED) tidak lagi otomatis berurutan seperti di SQLite.
+- Filter bulan di laporan memakai rentang tanggal (`BETWEEN 'YYYY-MM-01' AND akhir bulan`), bukan `LIKE 'YYYY-MM%'` yang tidak berlaku untuk kolom `date`.
+- **Folder data** dipisah dari lokasi database: `DATA_DIR` (default `data/`) untuk attachment, template Word, dan log.
+- **Salin data**: `bun --cwd=server run salin-data` menyalin `data/app.db` (atau `SQLITE_PATH`) ke Postgres yang masih kosong dalam satu transaksi, mempertahankan id, menyesuaikan sequence identity, menandai timestamp SQLite sebagai UTC, lalu membandingkan jumlah baris per tabel.
+- **Test** memakai database Postgres terpisah (`TEST_DATABASE_URL`, default `laporan_harian_test`, wajib berakhiran `_test`). `tests/setup.ts` (preload `bunfig.toml`) mengosongkan skemanya sekali per run; seeding memakai helper `tests/raw-db.ts` yang berbentuk mirip `bun:sqlite` supaya isi test lama tetap terbaca. `tests/schema.test.ts` sekarang membandingkan `schema.ts` dengan hasil migration lewat `information_schema` (menjaga agar `db:generate` tidak terlupa).
+
 ## Konsekuensi
 
 - Menambah dependency: `hono`, `drizzle-orm`, `drizzle-kit`, driver Postgres. Ini sengaja menyimpang dari prinsip minimum [ADR-0035](0035-backend-framework.md), karena tiga kebutuhan di atas sudah nyata, bukan perkiraan.
@@ -80,6 +92,6 @@ Kondisi kode per 2026-10-09 (diperiksa langsung, bukan asumsi):
 
 ## Rincian terbuka
 
-- Pilihan driver Postgres (`Bun.sql` vs `postgres.js`), diputuskan di awal tahap 3 berdasarkan dukungan Drizzle saat itu.
-- Apakah semua route langsung dipasang validasi zod di tahap 1, atau bertahap saat route itu disentuh.
-- Lingkungan Postgres untuk pengembangan lokal dan test (Docker atau instalasi lokal).
+- Apakah semua route dipasang validasi `@hono/zod-validator`, atau bertahap saat route itu disentuh.
+- Lingkungan Postgres untuk produksi dan backup terjadwal (`pg_dump`) dibahas di [Stage 8](../stages/08-verifikasi-lokal.md). Pengembangan lokal dan test memakai instalasi Postgres biasa (lihat README); Docker belum diperlukan.
+- Pilihan driver (`Bun.sql`) dan lingkungan test sudah diputuskan di tahap 3 (lihat catatan di atas).

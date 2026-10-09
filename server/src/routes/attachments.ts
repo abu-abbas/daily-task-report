@@ -1,6 +1,6 @@
 import { requireLogin } from "../authz";
 import { and, count, eq, inArray } from "drizzle-orm";
-import { db, type Tx } from "../db";
+import { db, type Tx, first } from "../db";
 import { attachments, taskLogs } from "../schema";
 import { errorResponse, json } from "../http";
 import {
@@ -46,7 +46,7 @@ const attachmentColumns = {
 const milikTaskLog = eq(attachments.attachable_type, "task_log");
 
 async function getAttachment(id: number): Promise<AttachmentRow | undefined> {
-  return db.select(attachmentColumns).from(attachments).where(eq(attachments.id, id)).get();
+  return db.select(attachmentColumns).from(attachments).where(eq(attachments.id, id)).then(first);
 }
 
 async function getTaskLog(id: number): Promise<{ userId: number; jenis: string; tanggal: string } | undefined> {
@@ -54,7 +54,7 @@ async function getTaskLog(id: number): Promise<{ userId: number; jenis: string; 
     .select({ userId: taskLogs.user_id, jenis: taskLogs.jenis, tanggal: taskLogs.tanggal })
     .from(taskLogs)
     .where(eq(taskLogs.id, id))
-    .get();
+    .then(first);
 }
 
 async function countAttachments(taskLogId: number): Promise<number> {
@@ -62,7 +62,7 @@ async function countAttachments(taskLogId: number): Promise<number> {
     .select({ c: count() })
     .from(attachments)
     .where(and(milikTaskLog, eq(attachments.attachable_id, taskLogId)))
-    .get();
+    .then(first);
   return row?.c ?? 0;
 }
 
@@ -74,7 +74,7 @@ async function getAttachmentOwner(attachmentId: number): Promise<number | null> 
     .from(attachments)
     .innerJoin(taskLogs, and(eq(taskLogs.id, attachments.attachable_id), milikTaskLog))
     .where(eq(attachments.id, attachmentId))
-    .get();
+    .then(first);
   return row?.userId ?? null;
 }
 
@@ -166,11 +166,11 @@ export async function handleGetAttachmentFile(req: Request, id: number): Promise
 // Dipakai task-logs.ts saat efek-uncheck menghapus task_logs — attachments itu polymorphic
 // (attachable_type/attachable_id generik), BUKAN FK sungguhan seperti kendala, jadi tidak
 // auto-cascade dan harus dibersihkan manual di sini supaya tidak jadi file/baris yatim.
-// Dipanggil dari dalam transaksi simpan harian (callback sinkron, lihat routes/users.ts).
-export function deleteAttachmentsByTaskLogIds(tx: Tx, taskLogIds: number[]): void {
+// Dipanggil dari dalam transaksi simpan harian.
+export async function deleteAttachmentsByTaskLogIds(tx: Tx, taskLogIds: number[]): Promise<void> {
   if (taskLogIds.length === 0) return;
   const where = and(milikTaskLog, inArray(attachments.attachable_id, taskLogIds));
-  const rows = tx.select({ filePath: attachments.file_path }).from(attachments).where(where).all();
+  const rows = await tx.select({ filePath: attachments.file_path }).from(attachments).where(where);
   for (const row of rows) deleteAttachmentFile(row.filePath);
-  tx.delete(attachments).where(where).run();
+  await tx.delete(attachments).where(where);
 }

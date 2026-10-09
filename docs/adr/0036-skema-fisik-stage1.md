@@ -12,7 +12,7 @@
 
 ## Keputusan
 
-DDL lengkap ada di [`schema/0001_initial.sql`](../schema/0001_initial.sql). Ringkasan tiap tabel terhadap spec awal:
+DDL lengkap ada di [`schema/sqlite-arsip/0001_initial.sql`](../schema/sqlite-arsip/0001_initial.sql). Ringkasan tiap tabel terhadap spec awal:
 
 | Tabel | Perubahan dari spec awal | Alasan |
 | --- | --- | --- |

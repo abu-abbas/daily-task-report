@@ -1,6 +1,6 @@
 # ADR-0046: Skema fisik untuk laporan bulanan PDF lengkap — DIGANTIKAN, lihat ADR-0019
 
-- Status: **digantikan** (2026-09-11, hari yang sama dengan diterimanya ADR ini) — lihat [ADR-0019 bagian "Word via template mail-merge milik tenaga ahli sendiri"](0019-word-per-tipe.md#word-via-template-mail-merge-milik-tenaga-ahli-sendiri-final-2026-09-11). Setelah dicoba nyata, Cover/Pendahuluan(BAB I)/Ruang Lingkup(BAB II) ternyata cukup statis di template Word masing-masing tenaga ahli — seluruh tabel di bawah ini (`jabatan`, `kontrak`, `ppk_saat_ini`, `ruang_lingkup_jabatan`, `ruang_lingkup_override`, `pendahuluan_bulanan`) **sudah di-DROP** lewat [`schema/0007_hapus_kontrak_ruang_lingkup_pendahuluan.sql`](../schema/0007_hapus_kontrak_ruang_lingkup_pendahuluan.sql) — halaman admin "Kelola Jabatan"/"Kelola Kontrak" dan tab self-fill di Detail Laporan ikut dihapus dari frontend. `saran_bulanan` TIDAK ikut di-drop, masih dipakai. Sisa dokumen ini dibiarkan apa adanya sebagai jejak keputusan (bukan dihapus), bukan rujukan skema yang berlaku sekarang.
+- Status: **digantikan** (2026-09-11, hari yang sama dengan diterimanya ADR ini) — lihat [ADR-0019 bagian "Word via template mail-merge milik tenaga ahli sendiri"](0019-word-per-tipe.md#word-via-template-mail-merge-milik-tenaga-ahli-sendiri-final-2026-09-11). Setelah dicoba nyata, Cover/Pendahuluan(BAB I)/Ruang Lingkup(BAB II) ternyata cukup statis di template Word masing-masing tenaga ahli — seluruh tabel di bawah ini (`jabatan`, `kontrak`, `ppk_saat_ini`, `ruang_lingkup_jabatan`, `ruang_lingkup_override`, `pendahuluan_bulanan`) **sudah di-DROP** lewat [`schema/sqlite-arsip/0007_hapus_kontrak_ruang_lingkup_pendahuluan.sql`](../schema/sqlite-arsip/0007_hapus_kontrak_ruang_lingkup_pendahuluan.sql) — halaman admin "Kelola Jabatan"/"Kelola Kontrak" dan tab self-fill di Detail Laporan ikut dihapus dari frontend. `saran_bulanan` TIDAK ikut di-drop, masih dipakai. Sisa dokumen ini dibiarkan apa adanya sebagai jejak keputusan (bukan dihapus), bukan rujukan skema yang berlaku sekarang.
 
 - Status lama (sudah tidak berlaku): diterima.
 - Tanggal: 2026-09-11.
@@ -14,7 +14,7 @@
 
 ## Keputusan
 
-DDL lengkap ada di [`schema/0005_laporan_template.sql`](../schema/0005_laporan_template.sql).
+DDL lengkap ada di [`schema/sqlite-arsip/0005_laporan_template.sql`](../schema/sqlite-arsip/0005_laporan_template.sql).
 
 | Tabel | Isi | Alasan |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ DDL lengkap ada di [`schema/0005_laporan_template.sql`](../schema/0005_laporan_t
 | `pendahuluan_bulanan` (baru) | `user_id`+`bulan` (PK), `deskripsi`, `maksud_tujuan`, `sasaran` | BAB I narasi (bukan Nama Kegiatan — itu dari `kontrak`+`ppk_saat_ini`), per user per bulan; prefill dari bulan sebelumnya dilakukan di aplikasi saat baris belum ada. Tidak digembok ke unduh. |
 | `saran_bulanan` (baru) | `user_id`+`bulan` (PK), `isi` | BAB V, wajib diisi sebelum tombol unduh aktif — validasi "tidak kosong" di endpoint unduh, bukan `CHECK` DDL. |
 
-Daftar/bullet (Ruang Lingkup, Saran, Nama Kegiatan) disimpan sebagai **TEXT satu-item-per-baris**, mengikuti pola `task_logs.catatan` yang sudah ada di [`0001_initial.sql`](../schema/0001_initial.sql) — bukan child table dengan kolom `urutan`, karena tidak ada tempat lain di aplikasi yang butuh baca item-nya satu per satu (parsing "Key: Value" atau daftar bullet cukup di kode aplikasi/frontend, sama seperti `MiniMarkdownText.vue` yang sudah dipakai untuk `catatan`).
+Daftar/bullet (Ruang Lingkup, Saran, Nama Kegiatan) disimpan sebagai **TEXT satu-item-per-baris**, mengikuti pola `task_logs.catatan` yang sudah ada di [`0001_initial.sql`](../schema/sqlite-arsip/0001_initial.sql) — bukan child table dengan kolom `urutan`, karena tidak ada tempat lain di aplikasi yang butuh baca item-nya satu per satu (parsing "Key: Value" atau daftar bullet cukup di kode aplikasi/frontend, sama seperti `MiniMarkdownText.vue` yang sudah dipakai untuk `catatan`).
 
 `ON DELETE RESTRICT` dipakai untuk semua referensi ke `users`/`jabatan` di tabel-tabel ini (bukan `CASCADE`), mengikuti pola `leaves`/`task_logs`/`attachments` di [ADR-0036](0036-skema-fisik-stage1.md) — data laporan histori tidak boleh hilang diam-diam kalau user/jabatan dihapus.
 
