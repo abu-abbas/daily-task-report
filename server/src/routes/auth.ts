@@ -9,6 +9,7 @@ import {
   SESSION_COOKIE,
 } from "../auth";
 import { requireLogin } from "../authz";
+import type { AuthContext } from "../types";
 import { errorResponse, json } from "../http";
 
 const loginSchema = z.object({
@@ -24,29 +25,29 @@ export async function handleLogin(req: Request): Promise<Response> {
   const session = await login(parsed.data.email, parsed.data.password);
   if (!session) return errorResponse(401, "Email atau password salah.");
 
-  const ctx = getAuthContext(session.token);
+  const ctx = await getAuthContext(session.token);
   return json(
     { user: publicUser(ctx!) },
     { headers: { "Set-Cookie": sessionCookie(session.token, session.expiresAt) } },
   );
 }
 
-export function handleLogout(req: Request): Response {
+export async function handleLogout(req: Request): Promise<Response> {
   const token = parseCookie(req.headers.get("Cookie"), SESSION_COOKIE);
-  if (token) logout(token);
+  if (token) await logout(token);
   return new Response(null, {
     status: 204,
     headers: { "Set-Cookie": clearSessionCookie() },
   });
 }
 
-export function handleMe(req: Request): Response {
-  const ctx = requireLogin(req);
+export async function handleMe(req: Request): Promise<Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
   return json({ user: publicUser(ctx) });
 }
 
-function publicUser(ctx: NonNullable<ReturnType<typeof getAuthContext>>) {
+function publicUser(ctx: AuthContext) {
   return {
     id: ctx.user.id,
     nama: ctx.user.nama,

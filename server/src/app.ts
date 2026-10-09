@@ -43,17 +43,17 @@ app.use("*", async (c, next) => {
       method: c.req.method,
       path: c.req.path,
       status: c.res.status,
-      userId: resolveAuth(c.req.raw)?.user.id,
+      userId: (await resolveAuth(c.req.raw))?.user.id,
     });
   }
 });
 
 // Jaring pengaman terakhir untuk exception yang tidak ditangkap handler mana pun.
-app.onError((err, c) => {
+app.onError(async (err, c) => {
   log("error", "Exception tidak tertangani", {
     method: c.req.method,
     path: c.req.path,
-    userId: resolveAuth(c.req.raw)?.user.id,
+    userId: (await resolveAuth(c.req.raw))?.user.id,
     ...errorMeta(err),
   });
   return errorResponse(500, "Terjadi kesalahan di server.");
@@ -65,13 +65,13 @@ app.notFound(() => new Response("Not found", { status: 404 }));
 // berlapis dan supaya test unit yang memanggil handler langsung tetap valid), tapi sesi cuma
 // di-query sekali per request karena hasilnya di-cache per Request (authz.ts).
 const loginRequired: MiddlewareHandler = async (c, next) => {
-  const ctx = requireLogin(c.req.raw);
+  const ctx = await requireLogin(c.req.raw);
   if (ctx instanceof Response) return ctx;
   await next();
 };
 
 const adminOnly: MiddlewareHandler = async (c, next) => {
-  const ctx = requireAdmin(c.req.raw);
+  const ctx = await requireAdmin(c.req.raw);
   if (ctx instanceof Response) return ctx;
   await next();
 };

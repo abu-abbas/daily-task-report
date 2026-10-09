@@ -5,10 +5,10 @@ import { join } from "node:path";
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { isWorkday, previousWorkday } = await import("../src/kalender");
 
-beforeAll(() => {
+beforeAll(async () => {
   runMigrations();
   // 2026-09-07 Senin, 2026-09-08 Selasa: libur tambahan berturutan (di luar akhir pekan).
   db.query("INSERT INTO holidays (nama, tanggal_mulai, tanggal_akhir) VALUES (?, ?, ?)").run(
@@ -25,45 +25,45 @@ beforeAll(() => {
 });
 
 describe("isWorkday", () => {
-  test("Senin-Jumat biasa adalah hari kerja", () => {
-    expect(isWorkday("2026-09-09")).toBe(true); // Rabu
+  test("Senin-Jumat biasa adalah hari kerja", async () => {
+    expect(await isWorkday("2026-09-09")).toBe(true); // Rabu
   });
 
-  test("Sabtu-Minggu selalu libur", () => {
-    expect(isWorkday("2026-09-05")).toBe(false); // Sabtu
-    expect(isWorkday("2026-09-06")).toBe(false); // Minggu
+  test("Sabtu-Minggu selalu libur", async () => {
+    expect(await isWorkday("2026-09-05")).toBe(false); // Sabtu
+    expect(await isWorkday("2026-09-06")).toBe(false); // Minggu
   });
 
-  test("tanggal dalam rentang holidays jadi libur walau hari kerja", () => {
-    expect(isWorkday("2026-09-07")).toBe(false); // Senin, masuk rentang libur
-    expect(isWorkday("2026-09-08")).toBe(false); // Selasa, masuk rentang libur
+  test("tanggal dalam rentang holidays jadi libur walau hari kerja", async () => {
+    expect(await isWorkday("2026-09-07")).toBe(false); // Senin, masuk rentang libur
+    expect(await isWorkday("2026-09-08")).toBe(false); // Selasa, masuk rentang libur
   });
 });
 
 describe("previousWorkday", () => {
-  test("hari Rabu biasa -> Selasa sebelumnya", () => {
-    expect(previousWorkday("2026-09-16")).toBe("2026-09-15");
+  test("hari Rabu biasa -> Selasa sebelumnya", async () => {
+    expect(await previousWorkday("2026-09-16")).toBe("2026-09-15");
   });
 
-  test("Senin -> lompat akhir pekan ke Jumat", () => {
-    expect(previousWorkday("2026-09-14")).toBe("2026-09-11");
+  test("Senin -> lompat akhir pekan ke Jumat", async () => {
+    expect(await previousWorkday("2026-09-14")).toBe("2026-09-11");
   });
 
-  test("melompati libur beruntun (Senin-Selasa libur) sampai ke Jumat sebelumnya", () => {
+  test("melompati libur beruntun (Senin-Selasa libur) sampai ke Jumat sebelumnya", async () => {
     // 2026-09-09 Rabu, mundur: Selasa 08 (libur), Senin 07 (libur), Minggu 06 (akhir
     // pekan), Sabtu 05 (akhir pekan), Jumat 04 (hari kerja).
-    expect(previousWorkday("2026-09-09")).toBe("2026-09-04");
+    expect(await previousWorkday("2026-09-09")).toBe("2026-09-04");
   });
 
-  test("lintas tahun: hari kerja pertama Januari mundur ke Desember tahun lalu", () => {
+  test("lintas tahun: hari kerja pertama Januari mundur ke Desember tahun lalu", async () => {
     // 2026-01-01 Kamis adalah hari kerja itu sendiri; ujung transisi tahun diuji lewat
     // tanggal berikutnya yang melompati libur Jumat 2 Jan.
-    expect(previousWorkday("2026-01-01")).toBe("2025-12-31");
+    expect(await previousWorkday("2026-01-01")).toBe("2025-12-31");
   });
 
-  test("melompati libur tunggal yang jatuh pas Jumat, lanjut ke Kamis", () => {
+  test("melompati libur tunggal yang jatuh pas Jumat, lanjut ke Kamis", async () => {
     // 2026-01-05 Senin mundur: Minggu 04 (akhir pekan), Sabtu 03 (akhir pekan),
     // Jumat 02 (libur), Kamis 01 (hari kerja).
-    expect(previousWorkday("2026-01-05")).toBe("2026-01-01");
+    expect(await previousWorkday("2026-01-05")).toBe("2026-01-01");
   });
 });

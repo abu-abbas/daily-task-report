@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { storageDir } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");

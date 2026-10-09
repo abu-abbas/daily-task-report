@@ -11,7 +11,7 @@ import { join } from "node:path";
 // jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini (lihat users.test.ts).
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login, logout, getAuthContext } = await import("../src/auth");
 
 const EMAIL = "tenaga.ahli@example.test";
@@ -30,7 +30,7 @@ describe("login/session", () => {
     const session = await login(EMAIL, PASSWORD);
     expect(session).not.toBeNull();
 
-    const ctx = getAuthContext(session!.token);
+    const ctx = await getAuthContext(session!.token);
     expect(ctx?.user.email).toBe(EMAIL);
   });
 
@@ -44,13 +44,13 @@ describe("login/session", () => {
     expect(session).toBeNull();
   });
 
-  test("token acak tanpa login ditolak", () => {
-    expect(getAuthContext("token-yang-tidak-pernah-ada")).toBeNull();
+  test("token acak tanpa login ditolak", async () => {
+    expect(await getAuthContext("token-yang-tidak-pernah-ada")).toBeNull();
   });
 
   test("logout mencabut session", async () => {
     const session = await login(EMAIL, PASSWORD);
-    logout(session!.token);
-    expect(getAuthContext(session!.token)).toBeNull();
+    await logout(session!.token);
+    expect(await getAuthContext(session!.token)).toBeNull();
   });
 });

@@ -6,21 +6,24 @@ import type { AuthContext } from "./types";
 // lebih dulu, lalu handler membaca hasil yang sama lewat requireLogin/requireAdmin tanpa query
 // sesi kedua. Handler yang dipanggil langsung tanpa middleware (test unit) tetap aman karena
 // cache kosong jatuh ke resolve biasa. WeakMap supaya entri ikut hilang bersama Request-nya.
-const authCache = new WeakMap<Request, AuthContext | null>();
+// Yang di-cache Promise-nya, supaya pemanggilan bersamaan pun tetap berbagi satu query sesi.
+const authCache = new WeakMap<Request, Promise<AuthContext | null>>();
 
-export function resolveAuth(req: Request): AuthContext | null {
-  if (authCache.has(req)) return authCache.get(req)!;
-  const ctx = getAuthContext(parseCookie(req.headers.get("Cookie"), SESSION_COOKIE));
-  authCache.set(req, ctx);
+export function resolveAuth(req: Request): Promise<AuthContext | null> {
+  let ctx = authCache.get(req);
+  if (!ctx) {
+    ctx = getAuthContext(parseCookie(req.headers.get("Cookie"), SESSION_COOKIE));
+    authCache.set(req, ctx);
+  }
   return ctx;
 }
 
-export function requireLogin(req: Request): AuthContext | Response {
-  return resolveAuth(req) ?? errorResponse(401, "Belum login.");
+export async function requireLogin(req: Request): Promise<AuthContext | Response> {
+  return (await resolveAuth(req)) ?? errorResponse(401, "Belum login.");
 }
 
-export function requireAdmin(req: Request): AuthContext | Response {
-  const ctx = requireLogin(req);
+export async function requireAdmin(req: Request): Promise<AuthContext | Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
   if (!ctx.roles.includes("admin")) return errorResponse(403, "Khusus admin.");
   return ctx;

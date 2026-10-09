@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleCreateTask } = await import("../src/routes/tasks");
@@ -89,8 +89,8 @@ beforeAll(async () => {
 });
 
 describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
-  test("checklist kosong karena belum pernah ada rencana", () => {
-    const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
+  test("checklist kosong karena belum pernah ada rencana", async () => {
+    const res = await handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
     expect(res.status).toBe(200);
     return res.json().then((body: { checklist: unknown[]; hariKerjaSebelumnya: string }) => {
       expect(body.checklist).toEqual([]);
@@ -151,7 +151,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
     );
     expect(saveRes.status).toBe(200);
 
-    const getRes = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
+    const getRes = await handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_A);
     const body = (await getRes.json()) as { rencanaHariIni: { taskId: number; catatan: string | null }[] };
     expect(body.rencanaHariIni.find((r) => r.taskId === taskXId)?.catatan).toBe(catatan);
   });
@@ -159,7 +159,7 @@ describe("Hari A — cold start, tanpa rencana sebelumnya", () => {
 
 describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   test("checklist berisi Task X dan Task Y dari rencana Hari A", async () => {
-    const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
+    const res = await handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
     const body = (await res.json()) as {
       checklist: { taskId: number; realisasiCatatan: string | null; rencanaCatatan: string | null }[];
     };
@@ -186,7 +186,7 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
     expect(res.status).toBe(200);
   });
 
-  test("Task Y yang tidak dicentang tidak menghasilkan realisasi", () => {
+  test("Task Y yang tidak dicentang tidak menghasilkan realisasi", async () => {
     const row = db
       .query("SELECT id FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = 'realisasi'")
       .get(tenagaId, taskYId, HARI_A);
@@ -194,7 +194,7 @@ describe("Hari B — realisasi sebagian dari rencana Hari A", () => {
   });
 
   test("GET ulang menunjukkan Task X sudah terisi, tambahan muncul terpisah", async () => {
-    const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
+    const res = await handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_B);
     const body = (await res.json()) as {
       checklist: { taskId: number; realisasiCatatan: string | null }[];
       tambahan: { deskripsi: string }[];
@@ -264,7 +264,7 @@ describe("Efek uncheck (ADR-0044)", () => {
 
 describe("Hari C — melompati akhir pekan, memakai rencana baru dari Hari B", () => {
   test("checklist berisi rencana baru (Task X) yang dibuat di Hari B", async () => {
-    const res = handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_C);
+    const res = await handleGetDailyInput(req("GET", "/api/task-logs/today", tenagaToken), HARI_C);
     const body = (await res.json()) as { checklist: { taskId: number }[]; hariKerjaSebelumnya: string };
     expect(body.hariKerjaSebelumnya).toBe(HARI_B);
     expect(body.checklist.map((c) => c.taskId)).toEqual([taskXId]);
@@ -356,8 +356,8 @@ describe("newTask.projectBaru — usulan project 'Lainnya'", () => {
 });
 
 describe("Otorisasi", () => {
-  test("GET tanpa login ditolak", () => {
-    const res = handleGetDailyInput(req("GET", "/api/task-logs/today"), HARI_A);
+  test("GET tanpa login ditolak", async () => {
+    const res = await handleGetDailyInput(req("GET", "/api/task-logs/today"), HARI_A);
     expect(res.status).toBe(401);
   });
 
@@ -374,8 +374,8 @@ describe("Otorisasi", () => {
 
 // ADR-0008/0009: tanggal laporan cuma boleh dalam bulan berjalan (relatif hari ini sungguhan).
 describe("Bulan berjalan (ADR-0008/0009)", () => {
-  test("GET dengan tanggal di bulan lalu ditolak (400)", () => {
-    const res = handleGetDailyInput(req("GET", "/api/task-logs/daily?tanggal=2026-09-30", tenagaToken), HARI_A);
+  test("GET dengan tanggal di bulan lalu ditolak (400)", async () => {
+    const res = await handleGetDailyInput(req("GET", "/api/task-logs/daily?tanggal=2026-09-30", tenagaToken), HARI_A);
     expect(res.status).toBe(400);
   });
 
@@ -391,7 +391,7 @@ describe("Bulan berjalan (ADR-0008/0009)", () => {
   });
 
   test("GET/POST tanggal backdate dalam bulan berjalan yang sama diterima", async () => {
-    const getRes = handleGetDailyInput(req("GET", `/api/task-logs/daily?tanggal=${HARI_B}`, tenagaToken), HARI_C);
+    const getRes = await handleGetDailyInput(req("GET", `/api/task-logs/daily?tanggal=${HARI_B}`, tenagaToken), HARI_C);
     expect(getRes.status).toBe(200);
 
     const postRes = await handleSaveDailyInput(

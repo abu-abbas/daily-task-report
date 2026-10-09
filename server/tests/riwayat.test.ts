@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleCreateTask } = await import("../src/routes/tasks");
@@ -94,13 +94,13 @@ beforeAll(async () => {
 });
 
 describe("GET /api/activity-heatmap", () => {
-  test("ditolak tanpa login", () => {
-    const res = handleGetActivityHeatmap(req("GET", "/api/activity-heatmap"));
+  test("ditolak tanpa login", async () => {
+    const res = await handleGetActivityHeatmap(req("GET", "/api/activity-heatmap"));
     expect(res.status).toBe(401);
   });
 
   test("kosong kalau belum ada realisasi sama sekali", async () => {
-    const res = handleGetActivityHeatmap(
+    const res = await handleGetActivityHeatmap(
       req("GET", "/api/activity-heatmap", tenagaToken),
       "2020-01-15",
     );
@@ -128,7 +128,7 @@ describe("GET /api/activity-heatmap", () => {
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan, is_extra) VALUES (?, ?, ?, 'realisasi', 'Dua kali 2', 1)",
     ).run(taskAId, tenagaId, `${BULAN}-03`);
 
-    const res = handleGetActivityHeatmap(
+    const res = await handleGetActivityHeatmap(
       req("GET", "/api/activity-heatmap", tenagaToken),
       HARI_INI_HEATMAP,
     );
@@ -146,7 +146,7 @@ describe("GET /api/activity-heatmap", () => {
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', 'Punya project B')",
     ).run(taskBId, tenagaId, `${BULAN}-07`);
 
-    const resA = handleGetActivityHeatmap(
+    const resA = await handleGetActivityHeatmap(
       req("GET", `/api/activity-heatmap?projectId=${projectAId}`, tenagaToken),
       HARI_INI_HEATMAP,
     );
@@ -154,7 +154,7 @@ describe("GET /api/activity-heatmap", () => {
     expect(bodyA.hari.some((h) => h.tanggal === `${BULAN}-05`)).toBe(true);
     expect(bodyA.hari.some((h) => h.tanggal === `${BULAN}-07`)).toBe(false);
 
-    const resB = handleGetActivityHeatmap(
+    const resB = await handleGetActivityHeatmap(
       req("GET", `/api/activity-heatmap?projectId=${projectBId}`, tenagaToken),
       HARI_INI_HEATMAP,
     );
@@ -168,7 +168,7 @@ describe("GET /api/activity-heatmap", () => {
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2024-01-10', 'realisasi', 'Terlalu lama')",
     ).run(taskAId, tenagaId);
 
-    const res = handleGetActivityHeatmap(
+    const res = await handleGetActivityHeatmap(
       req("GET", "/api/activity-heatmap", tenagaToken),
       HARI_INI_HEATMAP,
     );
@@ -186,7 +186,7 @@ describe("GET /api/activity-heatmap", () => {
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', 'Punya orang lain')",
     ).run(taskAId, lainId, `${BULAN}-20`);
 
-    const res = handleGetActivityHeatmap(
+    const res = await handleGetActivityHeatmap(
       req("GET", "/api/activity-heatmap", tenagaToken),
       HARI_INI_HEATMAP,
     );
@@ -196,8 +196,8 @@ describe("GET /api/activity-heatmap", () => {
 });
 
 describe("GET /api/activity-log", () => {
-  test("ditolak tanpa login", () => {
-    const res = handleListActivityLog(req("GET", "/api/activity-log"));
+  test("ditolak tanpa login", async () => {
+    const res = await handleListActivityLog(req("GET", "/api/activity-log"));
     expect(res.status).toBe(401);
   });
 
@@ -210,13 +210,13 @@ describe("GET /api/activity-log", () => {
       ).run(taskAId, tenagaId, `2026-06-${String((i % 28) + 1).padStart(2, "0")}`, `Log paginasi ${i}`);
     }
 
-    const res1 = handleListActivityLog(req("GET", "/api/activity-log", tenagaToken));
+    const res1 = await handleListActivityLog(req("GET", "/api/activity-log", tenagaToken));
     expect(res1.status).toBe(200);
     const body1 = (await res1.json()) as { items: { taskLogId: number }[]; nextCursor: string | null };
     expect(body1.items).toHaveLength(20);
     expect(body1.nextCursor).not.toBeNull();
 
-    const res2 = handleListActivityLog(
+    const res2 = await handleListActivityLog(
       req("GET", `/api/activity-log?cursor=${encodeURIComponent(body1.nextCursor!)}`, tenagaToken),
     );
     expect(res2.status).toBe(200);
@@ -226,21 +226,21 @@ describe("GET /api/activity-log", () => {
   });
 
   test("terurut tanggal terbaru dulu", async () => {
-    const res = handleListActivityLog(req("GET", "/api/activity-log", tenagaToken));
+    const res = await handleListActivityLog(req("GET", "/api/activity-log", tenagaToken));
     const body = (await res.json()) as { items: { tanggal: string }[] };
     const tanggals = body.items.map((i) => i.tanggal);
     expect(tanggals).toEqual([...tanggals].sort().reverse());
   });
 
   test("filter projectId cuma tampilkan realisasi task project itu", async () => {
-    const res = handleListActivityLog(req("GET", `/api/activity-log?projectId=${projectBId}`, tenagaToken));
+    const res = await handleListActivityLog(req("GET", `/api/activity-log?projectId=${projectBId}`, tenagaToken));
     const body = (await res.json()) as { items: { tanggal: string }[] };
     expect(body.items).toHaveLength(1);
     expect(body.items[0]!.tanggal).toBe(`${BULAN}-07`);
   });
 
   test("filter tanggal (dari klik heatmap) cuma tampilkan realisasi tanggal itu, tidak dipaginasi", async () => {
-    const res = handleListActivityLog(req("GET", `/api/activity-log?tanggal=${BULAN}-03`, tenagaToken));
+    const res = await handleListActivityLog(req("GET", `/api/activity-log?tanggal=${BULAN}-03`, tenagaToken));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: { tanggal: string }[]; nextCursor: string | null };
     expect(body.items).toHaveLength(2); // "Dua kali 1" dan "Dua kali 2" dari test paginasi
@@ -248,20 +248,20 @@ describe("GET /api/activity-log", () => {
     expect(body.nextCursor).toBeNull();
   });
 
-  test("filter tanggal ditolak (400) kalau format salah", () => {
-    const res = handleListActivityLog(req("GET", "/api/activity-log?tanggal=2026-4-3", tenagaToken));
+  test("filter tanggal ditolak (400) kalau format salah", async () => {
+    const res = await handleListActivityLog(req("GET", "/api/activity-log?tanggal=2026-4-3", tenagaToken));
     expect(res.status).toBe(400);
   });
 
   test("filter tanggal tanpa realisasi -> items kosong (bukan error)", async () => {
-    const res = handleListActivityLog(req("GET", "/api/activity-log?tanggal=2026-01-15", tenagaToken));
+    const res = await handleListActivityLog(req("GET", "/api/activity-log?tanggal=2026-01-15", tenagaToken));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: unknown[] };
     expect(body.items).toEqual([]);
   });
 
   test("data user lain tidak ikut kebawa (isolasi per user)", async () => {
-    const res = handleListActivityLog(req("GET", "/api/activity-log", tenagaToken));
+    const res = await handleListActivityLog(req("GET", "/api/activity-log", tenagaToken));
     const body = (await res.json()) as { items: { tanggal: string }[] };
     expect(body.items.some((i) => i.tanggal === `${BULAN}-20`)).toBe(false);
   });
@@ -269,17 +269,17 @@ describe("GET /api/activity-log", () => {
 
 describe("GET /api/history/:tanggal", () => {
   test("ditolak tanpa login", async () => {
-    const res = handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-05`), `${BULAN}-05`);
+    const res = await handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-05`), `${BULAN}-05`);
     expect(res.status).toBe(401);
   });
 
   test("ditolak (400) format tanggal salah", async () => {
-    const res = handleGetRiwayatDetail(req("GET", "/api/history/2026-4-5", tenagaToken), "2026-4-5");
+    const res = await handleGetRiwayatDetail(req("GET", "/api/history/2026-4-5", tenagaToken), "2026-4-5");
     expect(res.status).toBe(400);
   });
 
   test("tanggal tanpa log maupun izin -> items kosong, izin null (200, bukan 404)", async () => {
-    const res = handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-15`, tenagaToken), `${BULAN}-15`);
+    const res = await handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-15`, tenagaToken), `${BULAN}-15`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: unknown[]; izin: unknown };
     expect(body.items).toEqual([]);
@@ -298,7 +298,7 @@ describe("GET /api/history/:tanggal", () => {
       "INSERT INTO attachments (attachable_type, attachable_id, file_path, file_type, nama_asli, ukuran_bytes, uploaded_by) VALUES ('task_log', ?, 'attachments/x.jpg', 'image/jpeg', 'bukti.jpg', 100, ?)",
     ).run(realisasiLogId.id, tenagaId);
 
-    const res = handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-05`, tenagaToken), `${BULAN}-05`);
+    const res = await handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-05`, tenagaToken), `${BULAN}-05`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       items: { jenis: string; kendala: unknown[]; attachments: unknown[] }[];
@@ -307,7 +307,7 @@ describe("GET /api/history/:tanggal", () => {
     expect(realisasiItem.kendala).toHaveLength(1);
     expect(realisasiItem.attachments).toHaveLength(1);
 
-    const rencanaRes = handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-06`, tenagaToken), `${BULAN}-06`);
+    const rencanaRes = await handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-06`, tenagaToken), `${BULAN}-06`);
     const rencanaBody = (await rencanaRes.json()) as {
       items: { jenis: string; kendala: unknown[]; attachments: unknown[] }[];
     };
@@ -319,13 +319,13 @@ describe("GET /api/history/:tanggal", () => {
   test("izin tampil di detail", async () => {
     db.query("INSERT INTO leaves (user_id, tanggal, jenis) VALUES (?, ?, 'sakit')").run(tenagaId, `${BULAN}-10`);
 
-    const res = handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-10`, tenagaToken), `${BULAN}-10`);
+    const res = await handleGetRiwayatDetail(req("GET", `/api/history/${BULAN}-10`, tenagaToken), `${BULAN}-10`);
     const body = (await res.json()) as { izin: { jenis: string } | null };
     expect(body.izin?.jenis).toBe("sakit");
   });
 
   test("bolehEdit true untuk tanggal dalam bulan berjalan, false untuk tanggal lama", async () => {
-    const resBaru = handleGetRiwayatDetail(
+    const resBaru = await handleGetRiwayatDetail(
       req("GET", `/api/history/${BULAN}-05`, tenagaToken),
       `${BULAN}-05`,
       `${BULAN}-05`, // hariIniOverride = tanggal itu sendiri -> pasti dalam bulan berjalan
@@ -333,7 +333,7 @@ describe("GET /api/history/:tanggal", () => {
     const bodyBaru = (await resBaru.json()) as { bolehEdit: boolean };
     expect(bodyBaru.bolehEdit).toBe(true);
 
-    const resLama = handleGetRiwayatDetail(
+    const resLama = await handleGetRiwayatDetail(
       req("GET", `/api/history/${BULAN}-05`, tenagaToken),
       `${BULAN}-05`,
       "2026-08-01", // hariIniOverride jauh setelah tanggal laporan -> di luar bulan berjalan

@@ -1,5 +1,7 @@
+import { eq } from "drizzle-orm";
 import { db } from "./db";
-import type { AuthContext, Role, User } from "./types";
+import { sessions, userRoles, users } from "./schema";
+import type { AuthContext, Role } from "./types";
 
 const SESSION_DURATION_MS = Number(process.env.SESSION_DURATION_MS ?? 7 * 24 * 60 * 60 * 1000); // default 7 hari
 export const SESSION_COOKIE = process.env.SESSION_COOKIE ?? "session";
@@ -18,9 +20,7 @@ export async function login(
   email: string,
   password: string,
 ): Promise<{ token: string; expiresAt: Date } | null> {
-  const user = db
-    .query<User, [string]>("SELECT * FROM users WHERE email = ?")
-    .get(email);
+  const user = await db.select().from(users).where(eq(users.email, email)).get();
 
   // Selalu jalankan verify walau user/password_hash kosong supaya waktu respons
   // tidak membocorkan apakah email terdaftar (mitigasi timing/enumeration).
@@ -31,46 +31,40 @@ export async function login(
 
   const token = randomToken();
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
-  db.query(
-    "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)",
-  ).run(hashToken(token), user.id, expiresAt.toISOString());
+  await db.insert(sessions).values({
+    token_hash: hashToken(token),
+    user_id: user.id,
+    expires_at: expiresAt.toISOString(),
+  });
 
   return { token, expiresAt };
 }
 
-export function logout(token: string): void {
-  db.query("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(token));
+export async function logout(token: string): Promise<void> {
+  await db.delete(sessions).where(eq(sessions.token_hash, hashToken(token)));
 }
 
-export function getAuthContext(token: string | undefined): AuthContext | null {
+export async function getAuthContext(token: string | undefined): Promise<AuthContext | null> {
   if (!token) return null;
 
-  const row = db
-    .query<
-      User & { expires_at: string },
-      [string]
-    >(
-      `SELECT users.* , sessions.expires_at
-       FROM sessions JOIN users ON users.id = sessions.user_id
-       WHERE sessions.token_hash = ?`,
-    )
-    .get(hashToken(token));
+  const row = await db
+    .select({ user: users, expires_at: sessions.expires_at })
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.user_id))
+    .where(eq(sessions.token_hash, hashToken(token)))
+    .get();
 
   if (!row) return null;
   if (new Date(row.expires_at).getTime() < Date.now()) {
-    db.query("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(token));
+    await db.delete(sessions).where(eq(sessions.token_hash, hashToken(token)));
     return null;
   }
 
-  const roles = db
-    .query<{ role: Role }, [number]>(
-      "SELECT role FROM user_roles WHERE user_id = ?",
-    )
-    .all(row.id)
-    .map((r) => r.role);
+  const roles = (await db.select({ role: userRoles.role }).from(userRoles).where(eq(userRoles.user_id, row.user.id))).map(
+    (r) => r.role as Role,
+  );
 
-  const { expires_at, ...user } = row;
-  return { user, roles };
+  return { user: row.user, roles };
 }
 
 export function parseCookie(header: string | null, name: string): string | undefined {

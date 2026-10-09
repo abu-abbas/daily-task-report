@@ -11,7 +11,7 @@ import { join } from "node:path";
 // jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini.
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleListUsers, handleCreateUser, handleUpdateUser } = await import("../src/routes/users");
 
@@ -67,17 +67,17 @@ function req(method: string, path: string, token?: string, body?: unknown): Requ
 
 describe("GET /api/users", () => {
   test("ditolak tanpa login", async () => {
-    const res = handleListUsers(req("GET", "/api/users"));
+    const res = await handleListUsers(req("GET", "/api/users"));
     expect(res.status).toBe(401);
   });
 
   test("ditolak untuk non-admin", async () => {
-    const res = handleListUsers(req("GET", "/api/users", tenagaToken));
+    const res = await handleListUsers(req("GET", "/api/users", tenagaToken));
     expect(res.status).toBe(403);
   });
 
   test("admin bisa lihat daftar user", async () => {
-    const res = handleListUsers(req("GET", "/api/users", adminToken));
+    const res = await handleListUsers(req("GET", "/api/users", adminToken));
     expect(res.status).toBe(200);
     // >=3 (bukan pas 3): db dibagi lintas file test dalam satu proses "bun test",
     // jadi bisa ada user tambahan dari file test lain.

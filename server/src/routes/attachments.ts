@@ -1,5 +1,7 @@
 import { requireLogin } from "../authz";
-import { db } from "../db";
+import { and, count, eq, inArray } from "drizzle-orm";
+import { db, type Tx } from "../db";
+import { attachments, taskLogs } from "../schema";
 import { errorResponse, json } from "../http";
 import {
   absoluteAttachmentPath,
@@ -31,41 +33,48 @@ function publicAttachment(row: AttachmentRow) {
   };
 }
 
-function getAttachment(id: number): AttachmentRow | null {
-  return db
-    .query<AttachmentRow, [number]>(
-      "SELECT id, file_path, file_type, nama_asli, ukuran_bytes, uploaded_at FROM attachments WHERE id = ?",
-    )
-    .get(id);
+const attachmentColumns = {
+  id: attachments.id,
+  file_path: attachments.file_path,
+  file_type: attachments.file_type,
+  nama_asli: attachments.nama_asli,
+  ukuran_bytes: attachments.ukuran_bytes,
+  uploaded_at: attachments.uploaded_at,
+};
+
+// attachments polymorphic (attachable_type/attachable_id); semua lampiran saat ini milik task_log.
+const milikTaskLog = eq(attachments.attachable_type, "task_log");
+
+async function getAttachment(id: number): Promise<AttachmentRow | undefined> {
+  return db.select(attachmentColumns).from(attachments).where(eq(attachments.id, id)).get();
 }
 
-function getTaskLog(id: number): { userId: number; jenis: string; tanggal: string } | null {
+async function getTaskLog(id: number): Promise<{ userId: number; jenis: string; tanggal: string } | undefined> {
   return db
-    .query<{ userId: number; jenis: string; tanggal: string }, [number]>(
-      "SELECT user_id AS userId, jenis, tanggal FROM task_logs WHERE id = ?",
-    )
-    .get(id);
+    .select({ userId: taskLogs.user_id, jenis: taskLogs.jenis, tanggal: taskLogs.tanggal })
+    .from(taskLogs)
+    .where(eq(taskLogs.id, id))
+    .get();
 }
 
-function countAttachments(taskLogId: number): number {
-  const row = db
-    .query<{ c: number }, [number]>(
-      "SELECT COUNT(*) AS c FROM attachments WHERE attachable_type = 'task_log' AND attachable_id = ?",
-    )
-    .get(taskLogId)!;
-  return row.c;
+async function countAttachments(taskLogId: number): Promise<number> {
+  const row = await db
+    .select({ c: count() })
+    .from(attachments)
+    .where(and(milikTaskLog, eq(attachments.attachable_id, taskLogId)))
+    .get();
+  return row?.c ?? 0;
 }
 
 // Otorisasi kendala = kepemilikan task_log (ADR-0016, sama pola ADR-0015), bukan keanggotaan
 // project — user yang sudah keluar dari project tetap boleh kelola lampiran di histori sendiri.
-function getAttachmentOwner(attachmentId: number): number | null {
-  const row = db
-    .query<{ userId: number }, [number]>(
-      `SELECT tl.user_id AS userId FROM attachments a
-       JOIN task_logs tl ON tl.id = a.attachable_id AND a.attachable_type = 'task_log'
-       WHERE a.id = ?`,
-    )
-    .get(attachmentId);
+async function getAttachmentOwner(attachmentId: number): Promise<number | null> {
+  const row = await db
+    .select({ userId: taskLogs.user_id })
+    .from(attachments)
+    .innerJoin(taskLogs, and(eq(taskLogs.id, attachments.attachable_id), milikTaskLog))
+    .where(eq(attachments.id, attachmentId))
+    .get();
   return row?.userId ?? null;
 }
 
@@ -73,7 +82,7 @@ function getAttachmentOwner(attachmentId: number): number | null {
 // sudah dilakukan, bukan sesuatu yang nempel ke rencana yang belum dikerjakan. Boleh diunggah
 // kapan saja, tidak terikat jendela edit bulan berjalan (sama alasan resolve kendala).
 export async function handleUploadAttachment(req: Request): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const form = await req.formData().catch(() => null);
@@ -87,12 +96,12 @@ export async function handleUploadAttachment(req: Request): Promise<Response> {
   }
   if (!(file instanceof File)) return errorResponse(400, "File wajib diunggah.");
 
-  const taskLog = getTaskLog(taskLogId);
+  const taskLog = await getTaskLog(taskLogId);
   if (!taskLog) return errorResponse(404, "Log tidak ditemukan.");
   if (taskLog.userId !== ctx.user.id) return errorResponse(403, "Bukan pembuat log ini.");
   if (taskLog.jenis !== "realisasi") return errorResponse(400, "Lampiran hanya untuk log realisasi.");
 
-  if (countAttachments(taskLogId) >= MAX_FILES_PER_LOG) {
+  if ((await countAttachments(taskLogId)) >= MAX_FILES_PER_LOG) {
     return errorResponse(400, `Maksimal ${MAX_FILES_PER_LOG} lampiran per log.`);
   }
   if (file.size > MAX_SIZE_BYTES) {
@@ -105,40 +114,44 @@ export async function handleUploadAttachment(req: Request): Promise<Response> {
 
   const filePath = await saveAttachmentFile(taskLog.tanggal, taskLogId, bytes, ext);
 
-  const result = db
-    .query(
-      `INSERT INTO attachments (attachable_type, attachable_id, file_path, file_type, nama_asli, ukuran_bytes, uploaded_by)
-       VALUES ('task_log', ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(taskLogId, filePath, extToMime(ext), file.name, bytes.length, ctx.user.id);
-
-  const row = getAttachment(Number(result.lastInsertRowid))!;
-  return json({ attachment: publicAttachment(row) }, { status: 201 });
+  const [row] = await db
+    .insert(attachments)
+    .values({
+      attachable_type: "task_log",
+      attachable_id: taskLogId,
+      file_path: filePath,
+      file_type: extToMime(ext),
+      nama_asli: file.name,
+      ukuran_bytes: bytes.length,
+      uploaded_by: ctx.user.id,
+    })
+    .returning(attachmentColumns);
+  return json({ attachment: publicAttachment(row!) }, { status: 201 });
 }
 
 export async function handleDeleteAttachment(req: Request, id: number): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
-  const ownerId = getAttachmentOwner(id);
+  const ownerId = await getAttachmentOwner(id);
   if (ownerId === null) return errorResponse(404, "Lampiran tidak ditemukan.");
   if (ownerId !== ctx.user.id) return errorResponse(403, "Bukan pembuat log ini.");
 
-  const row = getAttachment(id)!;
+  const row = (await getAttachment(id))!;
   deleteAttachmentFile(row.file_path);
-  db.query("DELETE FROM attachments WHERE id = ?").run(id);
+  await db.delete(attachments).where(eq(attachments.id, id));
   return new Response(null, { status: 204 });
 }
 
 export async function handleGetAttachmentFile(req: Request, id: number): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
-  const ownerId = getAttachmentOwner(id);
+  const ownerId = await getAttachmentOwner(id);
   if (ownerId === null) return errorResponse(404, "Lampiran tidak ditemukan.");
   if (ownerId !== ctx.user.id) return errorResponse(403, "Bukan pembuat log ini.");
 
-  const row = getAttachment(id)!;
+  const row = (await getAttachment(id))!;
   const bunFile = Bun.file(absoluteAttachmentPath(row.file_path));
   if (!(await bunFile.exists())) return errorResponse(404, "File tidak ditemukan di disk.");
 
@@ -153,16 +166,11 @@ export async function handleGetAttachmentFile(req: Request, id: number): Promise
 // Dipakai task-logs.ts saat efek-uncheck menghapus task_logs — attachments itu polymorphic
 // (attachable_type/attachable_id generik), BUKAN FK sungguhan seperti kendala, jadi tidak
 // auto-cascade dan harus dibersihkan manual di sini supaya tidak jadi file/baris yatim.
-export function deleteAttachmentsByTaskLogIds(taskLogIds: number[]): void {
+// Dipanggil dari dalam transaksi simpan harian (callback sinkron, lihat routes/users.ts).
+export function deleteAttachmentsByTaskLogIds(tx: Tx, taskLogIds: number[]): void {
   if (taskLogIds.length === 0) return;
-  const placeholders = taskLogIds.map(() => "?").join(",");
-  const rows = db
-    .query<{ filePath: string }, number[]>(
-      `SELECT file_path AS filePath FROM attachments WHERE attachable_type = 'task_log' AND attachable_id IN (${placeholders})`,
-    )
-    .all(...taskLogIds);
+  const where = and(milikTaskLog, inArray(attachments.attachable_id, taskLogIds));
+  const rows = tx.select({ filePath: attachments.file_path }).from(attachments).where(where).all();
   for (const row of rows) deleteAttachmentFile(row.filePath);
-  db.query(
-    `DELETE FROM attachments WHERE attachable_type = 'task_log' AND attachable_id IN (${placeholders})`,
-  ).run(...taskLogIds);
+  tx.delete(attachments).where(where).run();
 }

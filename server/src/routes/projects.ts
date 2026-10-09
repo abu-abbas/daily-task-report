@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
-import { db } from "../db";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { db, type Tx } from "../db";
+import { projects, tasks, userProject, users } from "../schema";
 import { errorResponse, json } from "../http";
 import { requireAdmin, requireLogin } from "../authz";
 
@@ -15,56 +17,58 @@ interface MemberRow {
   nama: string;
 }
 
-function getActiveMembers(projectId: number): MemberRow[] {
+async function getActiveMembers(projectId: number): Promise<MemberRow[]> {
   return db
-    .query<MemberRow, [number]>(
-      `SELECT users.id, users.nama
-       FROM user_project
-       JOIN users ON users.id = user_project.user_id
-       WHERE user_project.project_id = ? AND user_project.ended_at IS NULL
-       ORDER BY users.nama`,
-    )
-    .all(projectId);
+    .select({ id: users.id, nama: users.nama })
+    .from(userProject)
+    .innerJoin(users, eq(users.id, userProject.user_id))
+    .where(and(eq(userProject.project_id, projectId), isNull(userProject.ended_at)))
+    .orderBy(asc(users.nama));
 }
 
-function publicProject(row: ProjectRow) {
+async function publicProject(row: ProjectRow) {
   return {
     id: row.id,
     nama: row.nama,
     isActive: row.is_active === 1,
     belumDirekonsiliasi: row.belum_direkonsiliasi === 1,
-    members: getActiveMembers(row.id),
+    members: await getActiveMembers(row.id),
   };
 }
 
-function getProjectRow(id: number): ProjectRow | null {
+const projectColumns = {
+  id: projects.id,
+  nama: projects.nama,
+  is_active: projects.is_active,
+  belum_direkonsiliasi: projects.belum_direkonsiliasi,
+};
+
+async function getProjectRow(id: number): Promise<ProjectRow | undefined> {
+  return db.select(projectColumns).from(projects).where(eq(projects.id, id)).get();
+}
+
+async function getMembership(userId: number, projectId: number): Promise<{ ended_at: string | null } | undefined> {
   return db
-    .query<ProjectRow, [number]>("SELECT id, nama, is_active, belum_direkonsiliasi FROM projects WHERE id = ?")
-    .get(id);
+    .select({ ended_at: userProject.ended_at })
+    .from(userProject)
+    .where(and(eq(userProject.user_id, userId), eq(userProject.project_id, projectId)))
+    .get();
 }
 
 // Dipakai handleAddMember (admin) dan handleMergeProject (ADR-0042, memindahkan anggota
 // project usulan ke project tujuan) — satu sumber logika "aktifkan lagi baris lama, jangan
-// menggandakan" (ADR-0034).
-function activateMembership(userId: number, projectId: number): void {
-  const existing = db
-    .query<{ ended_at: string | null }, [number, number]>(
-      "SELECT ended_at FROM user_project WHERE user_id = ? AND project_id = ?",
-    )
-    .get(userId, projectId);
+// menggandakan" (ADR-0034). Selalu dipanggil di dalam transaksi (callback sinkron, lihat
+// catatan di routes/users.ts) supaya cek-lalu-tulis tidak diselingi request lain.
+function activateMembership(tx: Tx, userId: number, projectId: number): void {
+  const where = and(eq(userProject.user_id, userId), eq(userProject.project_id, projectId));
+  const existing = tx.select({ ended_at: userProject.ended_at }).from(userProject).where(where).get();
 
   if (existing) {
     if (existing.ended_at !== null) {
-      db.query("UPDATE user_project SET ended_at = NULL WHERE user_id = ? AND project_id = ?").run(
-        userId,
-        projectId,
-      );
+      tx.update(userProject).set({ ended_at: null }).where(where).run();
     }
   } else {
-    db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
-      userId,
-      projectId,
-    );
+    tx.insert(userProject).values({ user_id: userId, project_id: projectId, ended_at: null }).run();
   }
 }
 
@@ -73,13 +77,13 @@ function activateMembership(userId: number, projectId: number): void {
 // kerja (Stage 3) memanggil fungsi ini langsung alih-alih menulis ulang query yang sama —
 // satu sumber kebenaran untuk "boleh/tidak boleh", bukan logic yang gampang lupa dipasang
 // di satu endpoint tertentu.
-export function isActiveProjectMember(userId: number, projectId: number): boolean {
-  const row = db
-    .query<{ user_id: number }, [number, number]>(
-      "SELECT user_id FROM user_project WHERE user_id = ? AND project_id = ? AND ended_at IS NULL",
-    )
-    .get(userId, projectId);
-  return row !== null;
+export async function isActiveProjectMember(userId: number, projectId: number): Promise<boolean> {
+  const row = await db
+    .select({ user_id: userProject.user_id })
+    .from(userProject)
+    .where(and(eq(userProject.user_id, userId), eq(userProject.project_id, projectId), isNull(userProject.ended_at)))
+    .get();
+  return row !== undefined;
 }
 
 const projectPayloadSchema = z.object({
@@ -91,32 +95,27 @@ const memberPayloadSchema = z.object({
   userId: z.number().int().positive(),
 });
 
-export function handleListProjects(req: Request): Response {
-  const ctx = requireAdmin(req);
+export async function handleListProjects(req: Request): Promise<Response> {
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
-  const rows = db
-    .query<ProjectRow, []>("SELECT id, nama, is_active, belum_direkonsiliasi FROM projects ORDER BY id")
-    .all();
-  return json({ projects: rows.map(publicProject) });
+  const rows = await db.select(projectColumns).from(projects).orderBy(asc(projects.id));
+  return json({ projects: await Promise.all(rows.map(publicProject)) });
 }
 
 // Project yang diikuti user yang sedang login (keanggotaan aktif) — dipakai filter pilihan
 // project di sidebar, dan nantinya Stage 3 untuk mencatat pekerjaan (ADR-0005).
-export function handleListMyProjects(req: Request): Response {
-  const ctx = requireLogin(req);
+export async function handleListMyProjects(req: Request): Promise<Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
-  const rows = db
-    .query<ProjectRow, [number]>(
-      `SELECT projects.id, projects.nama, projects.is_active, projects.belum_direkonsiliasi
-       FROM user_project
-       JOIN projects ON projects.id = user_project.project_id
-       WHERE user_project.user_id = ? AND user_project.ended_at IS NULL
-       ORDER BY projects.nama`,
-    )
-    .all(ctx.user.id);
-  return json({ projects: rows.map(publicProject) });
+  const rows = await db
+    .select(projectColumns)
+    .from(userProject)
+    .innerJoin(projects, eq(projects.id, userProject.project_id))
+    .where(and(eq(userProject.user_id, ctx.user.id), isNull(userProject.ended_at)))
+    .orderBy(asc(projects.nama));
+  return json({ projects: await Promise.all(rows.map(publicProject)) });
 }
 
 // Usulan "Lainnya" (ADR-0042) dibuat langsung di handleSaveDailyInput (server/src/routes/task-logs.ts),
@@ -126,16 +125,16 @@ export function handleListMyProjects(req: Request): Response {
 // Admin menyatakan usulan "Lainnya" sah berdiri sendiri sebagai project (ADR-0042). Rename
 // project ini (kalau perlu) tetap lewat PUT /api/projects/:id yang sudah ada, bukan diulang di sini.
 export async function handleConfirmProject(req: Request, id: number): Promise<Response> {
-  const ctx = requireAdmin(req);
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!Number.isInteger(id)) return errorResponse(400, "ID tidak valid.");
-  const row = getProjectRow(id);
+  const row = await getProjectRow(id);
   if (!row) return errorResponse(404, "Project tidak ditemukan.");
   if (row.belum_direkonsiliasi !== 1) return errorResponse(409, "Project ini bukan usulan yang menunggu rekonsiliasi.");
 
-  db.query("UPDATE projects SET belum_direkonsiliasi = 0 WHERE id = ?").run(id);
-  return json({ project: publicProject(getProjectRow(id)!) });
+  await db.update(projects).set({ belum_direkonsiliasi: 0 }).where(eq(projects.id, id));
+  return json({ project: await publicProject((await getProjectRow(id))!) });
 }
 
 const mergePayloadSchema = z.object({
@@ -147,11 +146,11 @@ const mergePayloadSchema = z.object({
 // project berflag belum_direkonsiliasi supaya jalur ini tidak dipakai menggabung project resmi
 // mana pun sembarangan.
 export async function handleMergeProject(req: Request, id: number): Promise<Response> {
-  const ctx = requireAdmin(req);
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!Number.isInteger(id)) return errorResponse(400, "ID tidak valid.");
-  const source = getProjectRow(id);
+  const source = await getProjectRow(id);
   if (!source) return errorResponse(404, "Project tidak ditemukan.");
   if (source.belum_direkonsiliasi !== 1) {
     return errorResponse(409, "Project ini bukan usulan yang menunggu rekonsiliasi.");
@@ -162,84 +161,79 @@ export async function handleMergeProject(req: Request, id: number): Promise<Resp
   if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
 
   if (parsed.data.targetProjectId === id) return errorResponse(400, "Tidak bisa digabung ke project itu sendiri.");
-  const target = getProjectRow(parsed.data.targetProjectId);
+  const target = await getProjectRow(parsed.data.targetProjectId);
   if (!target) return errorResponse(404, "Project tujuan tidak ditemukan.");
 
-  const members = getActiveMembers(id);
+  const members = await getActiveMembers(id);
 
-  db.transaction(() => {
-    db.query("UPDATE tasks SET project_id = ? WHERE project_id = ?").run(target.id, id);
-    for (const member of members) activateMembership(member.id, target.id);
-    db.query("DELETE FROM projects WHERE id = ?").run(id);
-  })();
+  db.transaction((tx) => {
+    tx.update(tasks).set({ project_id: target.id }).where(eq(tasks.project_id, id)).run();
+    for (const member of members) activateMembership(tx, member.id, target.id);
+    tx.delete(projects).where(eq(projects.id, id)).run();
+  });
 
-  return json({ project: publicProject(getProjectRow(target.id)!) });
+  return json({ project: await publicProject((await getProjectRow(target.id))!) });
 }
 
 export async function handleCreateProject(req: Request): Promise<Response> {
-  const ctx = requireAdmin(req);
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
   const body = await req.json().catch(() => null);
   const parsed = projectPayloadSchema.safeParse(body);
   if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
 
-  const result = db
-    .query("INSERT INTO projects (nama, is_active) VALUES (?, ?)")
-    .run(parsed.data.nama, parsed.data.isActive ? 1 : 0);
-  const row = getProjectRow(Number(result.lastInsertRowid))!;
-  return json({ project: publicProject(row) }, { status: 201 });
+  const [row] = await db
+    .insert(projects)
+    .values({ nama: parsed.data.nama, is_active: parsed.data.isActive ? 1 : 0 })
+    .returning(projectColumns);
+  return json({ project: await publicProject(row!) }, { status: 201 });
 }
 
 export async function handleUpdateProject(req: Request, id: number): Promise<Response> {
-  const ctx = requireAdmin(req);
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!Number.isInteger(id)) return errorResponse(400, "ID tidak valid.");
-  if (!getProjectRow(id)) return errorResponse(404, "Project tidak ditemukan.");
+  if (!(await getProjectRow(id))) return errorResponse(404, "Project tidak ditemukan.");
 
   const body = await req.json().catch(() => null);
   const parsed = projectPayloadSchema.safeParse(body);
   if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
 
-  db.query("UPDATE projects SET nama = ?, is_active = ? WHERE id = ?").run(
-    parsed.data.nama,
-    parsed.data.isActive ? 1 : 0,
-    id,
-  );
-  return json({ project: publicProject(getProjectRow(id)!) });
+  await db
+    .update(projects)
+    .set({ nama: parsed.data.nama, is_active: parsed.data.isActive ? 1 : 0 })
+    .where(eq(projects.id, id));
+  return json({ project: await publicProject((await getProjectRow(id))!) });
 }
 
 // Tambah anggota. Kalau user sebelumnya pernah jadi anggota lalu keluar (ended_at terisi),
 // aktifkan lagi baris yang sama (bukan baris baru) supaya histori lama tetap satu jejak,
 // bukan menghapus/mengganda — sejalan dengan ADR-0034 (akses histori tidak boleh hilang).
 export async function handleAddMember(req: Request, projectId: number): Promise<Response> {
-  const ctx = requireAdmin(req);
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!Number.isInteger(projectId)) return errorResponse(400, "ID tidak valid.");
-  if (!getProjectRow(projectId)) return errorResponse(404, "Project tidak ditemukan.");
+  if (!(await getProjectRow(projectId))) return errorResponse(404, "Project tidak ditemukan.");
 
   const body = await req.json().catch(() => null);
   const parsed = memberPayloadSchema.safeParse(body);
   if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
 
-  const user = db.query<{ id: number }, [number]>("SELECT id FROM users WHERE id = ?").get(parsed.data.userId);
+  const user = await db.select({ id: users.id }).from(users).where(eq(users.id, parsed.data.userId)).get();
   if (!user) return errorResponse(404, "User tidak ditemukan.");
 
-  const existing = db
-    .query<{ ended_at: string | null }, [number, number]>(
-      "SELECT ended_at FROM user_project WHERE user_id = ? AND project_id = ?",
-    )
-    .get(parsed.data.userId, projectId);
+  const existing = await getMembership(parsed.data.userId, projectId);
 
   if (existing && existing.ended_at === null) {
     return errorResponse(409, "User sudah menjadi anggota project ini.");
   }
 
-  activateMembership(parsed.data.userId, projectId);
+  db.transaction((tx) => activateMembership(tx, parsed.data.userId, projectId));
 
-  return json({ project: publicProject(getProjectRow(projectId)!) }, { status: 201 });
+  return json({ project: await publicProject((await getProjectRow(projectId))!) }, { status: 201 });
 }
 
 // Mengakhiri keanggotaan (ended_at = sekarang), bukan menghapus baris — histori realisasi
@@ -249,23 +243,20 @@ export async function handleEndMembership(
   projectId: number,
   userId: number,
 ): Promise<Response> {
-  const ctx = requireAdmin(req);
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!Number.isInteger(projectId) || !Number.isInteger(userId)) return errorResponse(400, "ID tidak valid.");
 
-  const existing = db
-    .query<{ ended_at: string | null }, [number, number]>(
-      "SELECT ended_at FROM user_project WHERE user_id = ? AND project_id = ?",
-    )
-    .get(userId, projectId);
+  const existing = await getMembership(userId, projectId);
   if (!existing || existing.ended_at !== null) {
     return errorResponse(404, "Keanggotaan aktif tidak ditemukan.");
   }
 
-  db.query(
-    "UPDATE user_project SET ended_at = CURRENT_TIMESTAMP WHERE user_id = ? AND project_id = ?",
-  ).run(userId, projectId);
+  await db
+    .update(userProject)
+    .set({ ended_at: sql`CURRENT_TIMESTAMP` })
+    .where(and(eq(userProject.user_id, userId), eq(userProject.project_id, projectId)));
 
-  return json({ project: publicProject(getProjectRow(projectId)!) });
+  return json({ project: await publicProject((await getProjectRow(projectId))!) });
 }
