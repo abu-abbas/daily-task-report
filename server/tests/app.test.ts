@@ -87,3 +87,11 @@ describe("routing Hono (ADR-0049)", () => {
     expect(entry.stack).toContain("ledakan uji");
   });
 });
+
+describe("GET /api/health", () => {
+  test("ok saat database terhubung, tanpa login", async () => {
+    const res = await get("/api/health");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "ok" });
+  });
+});

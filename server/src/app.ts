@@ -1,6 +1,8 @@
-import { Hono, type MiddlewareHandler } from "hono";
+import { sql } from "drizzle-orm";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { requireAdmin, requireLogin, resolveAuth } from "./authz";
-import { errorResponse } from "./http";
+import { db } from "./db";
+import { errorResponse, json } from "./http";
 import { errorMeta, log } from "./logger";
 import { handleLogin, handleLogout, handleMe } from "./routes/auth";
 import { handleCreateUser, handleListUsers, handleUpdateUser } from "./routes/users";
@@ -78,8 +80,26 @@ const adminOnly: MiddlewareHandler = async (c, next) => {
 
 const id = (raw: string | undefined) => Number(raw);
 
-// Publik: login/logout.
-app.post("/api/login", (c) => handleLogin(c.req.raw));
+// IP klien untuk pembatas login. Di belakang reverse proxy semua koneksi datang dari proxy, jadi
+// dengan TRUST_PROXY=1 dipakai header X-Real-IP yang diisi proxy (nginx: proxy_set_header X-Real-IP
+// $remote_addr). Server Bun meneruskan dirinya sebagai env (index.ts); di test env-nya kosong.
+function clientIp(c: Context): string | undefined {
+  if (process.env.TRUST_PROXY === "1") return c.req.header("X-Real-IP") || undefined;
+  const server = (c.env as { server?: { requestIP(req: Request): { address: string } | null } } | undefined)?.server;
+  return server?.requestIP(c.req.raw)?.address;
+}
+
+// Publik: health check (dipakai systemd/Docker/proxy), login/logout.
+app.get("/api/health", async () => {
+  try {
+    await db.execute(sql`SELECT 1`);
+    return json({ status: "ok" });
+  } catch (err) {
+    log("error", "Health check gagal", errorMeta(err));
+    return errorResponse(503, "Database tidak bisa dihubungi.");
+  }
+});
+app.post("/api/login", (c) => handleLogin(c.req.raw, clientIp(c)));
 app.post("/api/logout", (c) => handleLogout(c.req.raw));
 
 // Khusus admin.

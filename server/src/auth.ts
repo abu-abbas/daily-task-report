@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { db, first } from "./db";
+import { and, eq, lt, ne } from "drizzle-orm";
+import { db, first, type Tx } from "./db";
 import { sessions, userRoles, users } from "./schema";
 import type { AuthContext, Role } from "./types";
 
@@ -16,6 +16,11 @@ function hashToken(token: string): string {
   return new Bun.CryptoHasher("sha256").update(token).digest("hex");
 }
 
+// Hash argon2id asli (bukan string sembarang) untuk email yang tidak terdaftar. String yang formatnya
+// tidak valid ditolak verify dalam hitungan mikrodetik, sedangkan hash asli butuh ~200 ms, sehingga
+// selisih waktunya membocorkan email mana yang terdaftar. Dibuat sekali per proses.
+const dummyHash = Bun.password.hash(randomToken());
+
 export async function login(
   email: string,
   password: string,
@@ -24,7 +29,7 @@ export async function login(
 
   // Selalu jalankan verify walau user/password_hash kosong supaya waktu respons
   // tidak membocorkan apakah email terdaftar (mitigasi timing/enumeration).
-  const hash = user?.password_hash ?? "$argon2id$dummy$hash$untuk$timing$konsisten";
+  const hash = user?.password_hash ?? (await dummyHash);
   const valid = await Bun.password.verify(password, hash).catch(() => false);
 
   if (!user?.password_hash || !valid) return null;
@@ -42,6 +47,21 @@ export async function login(
 
 export async function logout(token: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.token_hash, hashToken(token)));
+}
+
+// Akhiri semua sesi user, misalnya setelah password diganti. `exceptToken` mempertahankan sesi yang
+// sedang dipakai (admin yang mengganti password dirinya sendiri tidak ikut ter-logout).
+export async function revokeUserSessions(userId: number, exceptToken?: string, runner: Tx | typeof db = db): Promise<void> {
+  const byUser = eq(sessions.user_id, userId);
+  await runner
+    .delete(sessions)
+    .where(exceptToken ? and(byUser, ne(sessions.token_hash, hashToken(exceptToken))) : byUser);
+}
+
+// Sesi kedaluwarsa hanya terhapus saat tokennya dipakai lagi; sisanya dibersihkan berkala (index.ts).
+export async function pruneExpiredSessions(): Promise<number> {
+  const deleted = await db.delete(sessions).where(lt(sessions.expires_at, new Date())).returning({ id: sessions.id });
+  return deleted.length;
 }
 
 export async function getAuthContext(token: string | undefined): Promise<AuthContext | null> {
