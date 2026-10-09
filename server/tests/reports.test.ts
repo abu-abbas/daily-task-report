@@ -7,7 +7,7 @@ import PizZip from "pizzip";
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { isWorkday } = await import("../src/kalender");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
@@ -45,11 +45,11 @@ const BULAN = "2026-03";
 // sungguhan. Cari tanggal workday nyata (bukan tebak manual hari-dalam-minggu) buat kandidat
 // "kosong" (sebelum hariIni, bukan 05/10 yang sudah kepakai) dan "masa depan" (setelah hariIni).
 const HARI_INI_PREVIEW = "2026-03-15";
-function cariWorkday(dariHari: number, sampaiHari: number, kecuali: number[]): string {
+async function cariWorkday(dariHari: number, sampaiHari: number, kecuali: number[]): Promise<string> {
   for (let d = dariHari; d <= sampaiHari; d++) {
     if (kecuali.includes(d)) continue;
     const tanggal = `${BULAN}-${String(d).padStart(2, "0")}`;
-    if (isWorkday(tanggal)) return tanggal;
+    if (await isWorkday(tanggal)) return tanggal;
   }
   throw new Error(`Tidak ketemu workday di rentang ${dariHari}-${sampaiHari}`);
 }
@@ -80,8 +80,8 @@ function reqUploadTemplate(token: string, file: File): Request {
 
 beforeAll(async () => {
   runMigrations();
-  TANGGAL_KOSONG_HARAPAN = cariWorkday(1, 15, [5, 10]);
-  TANGGAL_MASA_DEPAN = cariWorkday(16, 31, []);
+  TANGGAL_KOSONG_HARAPAN = await cariWorkday(1, 15, [5, 10]);
+  TANGGAL_MASA_DEPAN = await cariWorkday(16, 31, []);
   const hash = await Bun.password.hash(PASSWORD);
 
   const tenagaResult = db

@@ -11,7 +11,7 @@ import { join } from "node:path";
 // jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini.
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleListHolidays, handleCreateHoliday, handleDeleteHoliday } = await import(
   "../src/routes/holidays"
@@ -62,13 +62,13 @@ function req(method: string, path: string, token?: string, body?: unknown): Requ
 }
 
 describe("GET /api/holidays", () => {
-  test("ditolak tanpa login", () => {
-    const res = handleListHolidays(req("GET", "/api/holidays"));
+  test("ditolak tanpa login", async () => {
+    const res = await handleListHolidays(req("GET", "/api/holidays"));
     expect(res.status).toBe(401);
   });
 
-  test("tenaga ahli (bukan admin) tetap bisa membaca", () => {
-    const res = handleListHolidays(req("GET", "/api/holidays", tenagaToken));
+  test("tenaga ahli (bukan admin) tetap bisa membaca", async () => {
+    const res = await handleListHolidays(req("GET", "/api/holidays", tenagaToken));
     expect(res.status).toBe(200);
   });
 });
@@ -121,7 +121,7 @@ describe("POST /api/holidays", () => {
   });
 
   test("muncul di daftar setelah ditambahkan", async () => {
-    const res = handleListHolidays(req("GET", "/api/holidays", adminToken));
+    const res = await handleListHolidays(req("GET", "/api/holidays", adminToken));
     const body = (await res.json()) as { holidays: { nama: string }[] };
     expect(body.holidays.some((h) => h.nama === "Kelahiran Yesus Kristus")).toBe(true);
   });

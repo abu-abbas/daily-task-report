@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleListTasks, handleCreateTask, handleCloseTask } = await import("../src/routes/tasks");
@@ -74,23 +74,23 @@ beforeAll(async () => {
 });
 
 describe("GET /api/tasks", () => {
-  test("ditolak tanpa login", () => {
-    const res = handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`));
+  test("ditolak tanpa login", async () => {
+    const res = await handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`));
     expect(res.status).toBe(401);
   });
 
-  test("ditolak tanpa projectId", () => {
-    const res = handleListTasks(req("GET", "/api/tasks", tenagaToken));
+  test("ditolak tanpa projectId", async () => {
+    const res = await handleListTasks(req("GET", "/api/tasks", tenagaToken));
     expect(res.status).toBe(400);
   });
 
-  test("ditolak untuk yang bukan anggota aktif project", () => {
-    const res = handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, luarToken));
+  test("ditolak untuk yang bukan anggota aktif project", async () => {
+    const res = await handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, luarToken));
     expect(res.status).toBe(403);
   });
 
-  test("anggota aktif bisa lihat daftar (kosong di awal)", () => {
-    const res = handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, tenagaToken));
+  test("anggota aktif bisa lihat daftar (kosong di awal)", async () => {
+    const res = await handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, tenagaToken));
     expect(res.status).toBe(200);
   });
 });
@@ -113,8 +113,8 @@ describe("POST /api/tasks", () => {
     expect(body.task.status).toBe("open");
   });
 
-  test("task baru muncul di daftar", () => {
-    const res = handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, tenagaToken));
+  test("task baru muncul di daftar", async () => {
+    const res = await handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, tenagaToken));
     return res.json().then((body: { tasks: { deskripsi: string }[] }) => {
       expect(body.tasks.some((t) => t.deskripsi === "Setup CI")).toBe(true);
     });
@@ -195,8 +195,8 @@ describe("POST /api/tasks/:id/tutup", () => {
     expect(res.status).toBe(409);
   });
 
-  test("task closed tidak lagi muncul di daftar task terbuka", () => {
-    const res = handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, tenagaToken));
+  test("task closed tidak lagi muncul di daftar task terbuka", async () => {
+    const res = await handleListTasks(req("GET", `/api/tasks?projectId=${projectId}`, tenagaToken));
     return res.json().then((body: { tasks: { deskripsi: string }[] }) => {
       expect(body.tasks.some((t) => t.deskripsi === "Task Ditutup")).toBe(false);
     });

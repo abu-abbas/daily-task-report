@@ -1,6 +1,6 @@
 # ADR-0049: Hono, Drizzle, dan PostgreSQL secara bertahap
 
-- Status: diterima (PR #1 di-merge 2026-10-09). Tahap 1 dikerjakan; tahap 2 dan 3 belum.
+- Status: diterima (PR #1 di-merge 2026-10-09). Tahap 1 dan 2 dikerjakan; tahap 3 belum.
 - Tanggal: 2026-10-09.
 - Stage utama: lintas stage (infrastruktur backend), tidak terikat satu stage fitur.
 - Merevisi: [ADR-0035](0035-backend-framework.md) (tanpa framework/ORM) dan [ADR-0002](0002-database-sqlite.md) (SQLite, "PostgreSQL bukan cakupan saat ini").
@@ -44,6 +44,15 @@ Kondisi kode per 2026-10-09 (diperiksa langsung, bukan asumsi):
 - Test tetap memakai SQLite sementara seperti sekarang, sehingga setiap modul yang dipindah langsung terverifikasi oleh test yang ada.
 - Migration tetap file SQL di `docs/schema/` sampai tahap 3; Drizzle dipakai untuk query dan tipe, belum untuk migration.
 
+### Catatan pelaksanaan tahap 2 (2026-10-09)
+
+- `server/src/schema.ts` ditulis tangan, bukan hasil `drizzle-kit pull` (perintah itu butuh `better-sqlite3`/`@libsql/client` yang tidak dipakai proyek ini). Supaya tidak menyimpang dari migration, `tests/schema.test.ts` membandingkan setiap tabel dan kolom (nama, NOT NULL, primary key) dengan database hasil migration. `drizzle-kit` baru dipasang di tahap 3, saat migration pindah ke Drizzle.
+- Nama properti di `schema.ts` sengaja sama dengan nama kolom (snake_case), supaya baris hasil query tetap cocok dengan tipe yang sudah ada (`types.ts`, tipe row di tiap route).
+- Semua query aplikasi sudah lewat Drizzle; `bun:sqlite` langsung (`sqlite` di `db.ts`) tinggal dipakai migration dan seeding data di test.
+- **Transaksi tetap memakai callback sinkron** (`.get()/.all()/.run()` di dalam `db.transaction((tx) => ...)`). Transaksi driver bun:sqlite tidak boleh diselingi `await`: query sesudah `await` akan jatuh di luar transaksi, dan request lain bisa menyelip masuk ke transaksi yang sedang terbuka. Ada 7 transaksi seperti ini (`users` ×2, `leaves`, `tasks`, `projects` ×2, `task-logs`) plus helper `activateMembership`, `upsertTaskLog`, `deleteAttachmentsByTaskLogIds` yang menerima `tx`. Di tahap 3 semuanya diubah ke `await db.transaction(async (tx) => ...)`; `tests/db.test.ts` menjaga rollback tetap utuh.
+- Pelanggaran UNIQUE dideteksi lewat `isUniqueViolation` di `db.ts` (Drizzle membungkus error driver; fungsi ini juga sudah mengenali kode Postgres `23505`).
+- `INSERT OR IGNORE` diganti `onConflictDoNothing()`, `LIKE ? || '%'` diganti ``like(kolom, `${bulan}%`)``, dan `lastInsertRowid` diganti `RETURNING`, sehingga tidak ada lagi SQL khusus SQLite di kode aplikasi.
+
 ### Tahap 3: ganti ke PostgreSQL
 
 - Driver Drizzle diganti ke Postgres (`Bun.sql` atau `postgres.js`, dipilih saat implementasi).
@@ -65,7 +74,7 @@ Kondisi kode per 2026-10-09 (diperiksa langsung, bukan asumsi):
 
 - Menambah dependency: `hono`, `drizzle-orm`, `drizzle-kit`, driver Postgres. Ini sengaja menyimpang dari prinsip minimum [ADR-0035](0035-backend-framework.md), karena tiga kebutuhan di atas sudah nyata, bukan perkiraan.
 - Tahap 2 adalah pekerjaan terbesar (perubahan sinkron ke async di ±127 pemanggilan query). Tahap 1 dan 3 relatif kecil.
-- Selama tahap 2 berlangsung, kode berisi campuran query `bun:sqlite` lama dan Drizzle. Ini dapat diterima selama tiap PR menjaga test tetap hijau; tahap 3 baru dimulai setelah tidak ada lagi pemanggilan `bun:sqlite` langsung di luar inisialisasi driver.
+- Selama tahap 2 berlangsung, kode boleh berisi campuran query `bun:sqlite` lama dan Drizzle (pada praktiknya tahap 2 selesai dalam satu PR, jadi campuran ini tidak pernah masuk `main`). Ini dapat diterima selama tiap PR menjaga test tetap hijau; tahap 3 baru dimulai setelah tidak ada lagi pemanggilan `bun:sqlite` langsung di luar inisialisasi driver.
 - Deployment membutuhkan server PostgreSQL. Backup/restore di [Stage 8](../stages/08-verifikasi-lokal.md) beralih dari salin file `app.db` ke `pg_dump`/`pg_restore`.
 - Selama belum tahap 3, fitur baru tidak boleh memakai fitur khusus SQLite (`json_*`, `strftime`, `INSERT OR ...`, dll) supaya beban migrasi tidak bertambah.
 

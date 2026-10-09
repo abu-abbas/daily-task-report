@@ -1,16 +1,11 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
+import { saranBulanan } from "../schema";
 import { errorResponse, json } from "../http";
 
 const BULAN_RE = /^\d{4}-\d{2}$/;
-
-interface SaranRow {
-  user_id: number;
-  bulan: string;
-  isi: string;
-  updated_at: string;
-}
 
 const saranPayloadSchema = z.object({
   isi: z.string().optional().default(""),
@@ -18,22 +13,19 @@ const saranPayloadSchema = z.object({
 
 // BAB V — TIDAK prefill dari bulan sebelumnya (beda dari Pendahuluan): wajib diisi ulang
 // tiap bulan (ADR-0019), kosong kalau belum pernah disimpan.
-export function handleGetSaran(req: Request): Response {
-  const ctx = requireLogin(req);
+export async function handleGetSaran(req: Request): Promise<Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const bulan = url.searchParams.get("bulan");
   if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
 
-  const row = db
-    .query<SaranRow, [number, string]>("SELECT * FROM saran_bulanan WHERE user_id = ? AND bulan = ?")
-    .get(ctx.user.id, bulan);
-  return json({ isi: row?.isi ?? "" });
+  return json({ isi: await getSaranIsi(ctx.user.id, bulan) });
 }
 
 export async function handleSaveSaran(req: Request): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
@@ -44,30 +36,36 @@ export async function handleSaveSaran(req: Request): Promise<Response> {
   const parsed = saranPayloadSchema.safeParse(body);
   if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
 
-  db.query(
-    `INSERT INTO saran_bulanan (user_id, bulan, isi, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-     ON CONFLICT (user_id, bulan) DO UPDATE SET isi = excluded.isi, updated_at = CURRENT_TIMESTAMP`,
-  ).run(ctx.user.id, bulan, parsed.data.isi);
+  await db
+    .insert(saranBulanan)
+    .values({ user_id: ctx.user.id, bulan, isi: parsed.data.isi })
+    .onConflictDoUpdate({
+      target: [saranBulanan.user_id, saranBulanan.bulan],
+      set: { isi: parsed.data.isi, updated_at: sql`CURRENT_TIMESTAMP` },
+    });
 
   return json({ isi: parsed.data.isi });
 }
 
 // Dipakai endpoint unduh laporan (Stage 7 "laporan gabungan") untuk menggembok tombol unduh
 // sampai Saran & Rekomendasi terisi (ADR-0019) — teks kosong/whitespace dianggap belum diisi.
-export function isSaranTerisi(userId: number, bulan: string): boolean {
-  const row = db
-    .query<{ isi: string }, [number, string]>("SELECT isi FROM saran_bulanan WHERE user_id = ? AND bulan = ?")
-    .get(userId, bulan);
-  return (row?.isi ?? "").trim() !== "";
+async function getSaranIsi(userId: number, bulan: string): Promise<string> {
+  const row = await db
+    .select({ isi: saranBulanan.isi })
+    .from(saranBulanan)
+    .where(and(eq(saranBulanan.user_id, userId), eq(saranBulanan.bulan, bulan)))
+    .get();
+  return row?.isi ?? "";
+}
+
+export async function isSaranTerisi(userId: number, bulan: string): Promise<boolean> {
+  return (await getSaranIsi(userId, bulan)).trim() !== "";
 }
 
 // Baris saran, satu item per baris (bukan markdown) — dipakai agregasi laporan PDF setelah
 // isSaranTerisi memastikan sudah diisi.
-export function getSaranLines(userId: number, bulan: string): string[] {
-  const row = db
-    .query<{ isi: string }, [number, string]>("SELECT isi FROM saran_bulanan WHERE user_id = ? AND bulan = ?")
-    .get(userId, bulan);
-  return (row?.isi ?? "")
+export async function getSaranLines(userId: number, bulan: string): Promise<string[]> {
+  return (await getSaranIsi(userId, bulan))
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");

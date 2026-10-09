@@ -1,6 +1,8 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
-import { db } from "../db";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { db, type Tx } from "../db";
+import { attachments, kendala, leaves, projects, taskLogCommits, taskLogs, tasks, userProject } from "../schema";
 import { errorResponse, json } from "../http";
 import { dalamBulanBerjalan, previousWorkday, realisasiTanggalDiizinkan, todayJakarta } from "../kalender";
 import { isActiveProjectMember } from "./projects";
@@ -24,15 +26,13 @@ export interface KendalaPublic {
 
 // Kendala cuma untuk log realisasi (ADR-0015) — dipanggil sekali per taskLogId yang relevan
 // (checklist + tambahan hari ini), bukan query N+1 per item.
-export function kendalaByTaskLogId(taskLogIds: number[]): Map<number, KendalaPublic[]> {
+export async function kendalaByTaskLogId(taskLogIds: number[]): Promise<Map<number, KendalaPublic[]>> {
   const map = new Map<number, KendalaPublic[]>();
   if (taskLogIds.length === 0) return map;
-  const placeholders = taskLogIds.map(() => "?").join(",");
-  const rows = db
-    .query<{ id: number; taskLogId: number; deskripsi: string; status: "open" | "resolved" }, number[]>(
-      `SELECT id, task_log_id AS taskLogId, deskripsi, status FROM kendala WHERE task_log_id IN (${placeholders})`,
-    )
-    .all(...taskLogIds);
+  const rows = await db
+    .select({ id: kendala.id, taskLogId: kendala.task_log_id, deskripsi: kendala.deskripsi, status: kendala.status })
+    .from(kendala)
+    .where(inArray(kendala.task_log_id, taskLogIds));
   for (const row of rows) {
     const list = map.get(row.taskLogId) ?? [];
     list.push(row);
@@ -51,16 +51,20 @@ export interface AttachmentPublic {
 
 // Attachment cuma untuk log realisasi (ADR-0016) — pola sama kendalaByTaskLogId, sekali jalan
 // per taskLogId yang relevan, bukan N+1.
-export function attachmentsByTaskLogId(taskLogIds: number[]): Map<number, AttachmentPublic[]> {
+export async function attachmentsByTaskLogId(taskLogIds: number[]): Promise<Map<number, AttachmentPublic[]>> {
   const map = new Map<number, AttachmentPublic[]>();
   if (taskLogIds.length === 0) return map;
-  const placeholders = taskLogIds.map(() => "?").join(",");
-  const rows = db
-    .query<AttachmentPublic & { taskLogId: number }, number[]>(
-      `SELECT id, attachable_id AS taskLogId, nama_asli AS namaAsli, file_type AS fileType, ukuran_bytes AS ukuranBytes, uploaded_at AS uploadedAt
-       FROM attachments WHERE attachable_type = 'task_log' AND attachable_id IN (${placeholders})`,
-    )
-    .all(...taskLogIds);
+  const rows = await db
+    .select({
+      id: attachments.id,
+      taskLogId: attachments.attachable_id,
+      namaAsli: attachments.nama_asli,
+      fileType: attachments.file_type,
+      ukuranBytes: attachments.ukuran_bytes,
+      uploadedAt: attachments.uploaded_at,
+    })
+    .from(attachments)
+    .where(and(eq(attachments.attachable_type, "task_log"), inArray(attachments.attachable_id, taskLogIds)));
   for (const row of rows) {
     const list = map.get(row.taskLogId) ?? [];
     list.push(row);
@@ -75,6 +79,26 @@ interface RencanaChecklistRow extends ChecklistRow {
 
 const TANGGAL_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Kolom task + project yang ditampilkan bersama setiap log di input harian.
+const taskInfoColumns = {
+  taskId: taskLogs.task_id,
+  deskripsi: tasks.deskripsi,
+  tag: tasks.tag,
+  taskStatus: tasks.status,
+  projectId: tasks.project_id,
+  projectNama: projects.nama,
+};
+
+// Filter task_logs milik user pada satu tanggal + jenis (opsional cuma kerjaan tambahan).
+function logFilter(userId: number, tanggal: string, jenis: "rencana" | "realisasi", extraOnly = false) {
+  return and(
+    eq(taskLogs.user_id, userId),
+    eq(taskLogs.tanggal, tanggal),
+    eq(taskLogs.jenis, jenis),
+    extraOnly ? eq(taskLogs.is_extra, 1) : undefined,
+  );
+}
+
 // Checklist realisasi hari ini = rencana milik user pada hari kerja sebelumnya (ADR-0006).
 // Rencana yang diisi hari ini bertanggal hari ini juga (tanggal laporan), bukan besok — satu
 // submit boleh berisi realisasi kemarin dan rencana hari ini sekaligus (ADR-0007). Kerjaan
@@ -83,8 +107,8 @@ const TANGGAL_RE = /^\d{4}-\d{2}-\d{2}$/;
 // bergantung pada tanggal asli saat test dijalankan. Route asli (index.ts) memanggil tanpa
 // argumen ini, selalu memakai todayJakarta() sungguhan. tanggal (laporan yang dilihat/diisi)
 // datang dari klien lewat query string — bisa backdate dalam bulan berjalan (ADR-0008/0009).
-export function handleGetDailyInput(req: Request, hariIniOverride?: string): Response {
-  const ctx = requireLogin(req);
+export async function handleGetDailyInput(req: Request, hariIniOverride?: string): Promise<Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const hariIni = hariIniOverride ?? todayJakarta();
@@ -96,42 +120,34 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
   if (!dalamBulanBerjalan(tanggal, hariIni)) {
     return errorResponse(400, "Tanggal laporan di luar bulan berjalan.");
   }
-  const hariKerjaSebelumnya = previousWorkday(tanggal);
+  const hariKerjaSebelumnya = await previousWorkday(tanggal);
 
   // rencanaCatatan (bukan cuma deskripsi/badge) ikut dikirim supaya checklist-di-dalam-catatan
   // rencana (ADR-0043) tetap terlihat sebagai referensi saat mengisi realisasi besok — sebelumnya
   // hilang total begitu rencana jadi item checklist, user tidak bisa lihat lagi apa yang direncanakan.
-  const checklistRows = db
-    .query<RencanaChecklistRow, [number, string]>(
-      `SELECT tl.task_id AS taskId, tl.catatan AS rencanaCatatan, t.deskripsi, t.tag, t.status AS taskStatus, t.project_id AS projectId, p.nama AS projectNama
-       FROM task_logs tl
-       JOIN tasks t ON t.id = tl.task_id
-       JOIN projects p ON p.id = t.project_id
-       WHERE tl.user_id = ? AND tl.tanggal = ? AND tl.jenis = 'rencana'
-       ORDER BY t.deskripsi`,
-    )
-    .all(ctx.user.id, hariKerjaSebelumnya);
+  const checklistRows: RencanaChecklistRow[] = await db
+    .select({ ...taskInfoColumns, rencanaCatatan: taskLogs.catatan })
+    .from(taskLogs)
+    .innerJoin(tasks, eq(tasks.id, taskLogs.task_id))
+    .innerJoin(projects, eq(projects.id, tasks.project_id))
+    .where(logFilter(ctx.user.id, hariKerjaSebelumnya, "rencana"))
+    .orderBy(asc(tasks.deskripsi));
 
-  const realisasiRows = db
-    .query<{ id: number; taskId: number; catatan: string | null; isExtra: number }, [number, string]>(
-      `SELECT id, task_id AS taskId, catatan, is_extra AS isExtra FROM task_logs
-       WHERE user_id = ? AND tanggal = ? AND jenis = 'realisasi'`,
-    )
-    .all(ctx.user.id, hariKerjaSebelumnya);
+  const realisasiRows = await db
+    .select({ id: taskLogs.id, taskId: taskLogs.task_id, catatan: taskLogs.catatan, isExtra: taskLogs.is_extra })
+    .from(taskLogs)
+    .where(logFilter(ctx.user.id, hariKerjaSebelumnya, "realisasi"));
   const realisasiByTask = new Map(
     realisasiRows.filter((r) => r.isExtra === 0).map((r) => [r.taskId, { taskLogId: r.id, catatan: r.catatan }]),
   );
 
-  const tambahan = db
-    .query<ChecklistRow & { taskLogId: number; catatan: string | null }, [number, string]>(
-      `SELECT tl.id AS taskLogId, tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.status AS taskStatus, t.project_id AS projectId, p.nama AS projectNama
-       FROM task_logs tl
-       JOIN tasks t ON t.id = tl.task_id
-       JOIN projects p ON p.id = t.project_id
-       WHERE tl.user_id = ? AND tl.tanggal = ? AND tl.jenis = 'realisasi' AND tl.is_extra = 1
-       ORDER BY t.deskripsi`,
-    )
-    .all(ctx.user.id, hariKerjaSebelumnya);
+  const tambahan = await db
+    .select({ taskLogId: taskLogs.id, ...taskInfoColumns, catatan: taskLogs.catatan })
+    .from(taskLogs)
+    .innerJoin(tasks, eq(tasks.id, taskLogs.task_id))
+    .innerJoin(projects, eq(projects.id, tasks.project_id))
+    .where(logFilter(ctx.user.id, hariKerjaSebelumnya, "realisasi", true))
+    .orderBy(asc(tasks.deskripsi));
 
   // Kendala + attachment cuma untuk log realisasi (ADR-0015/ADR-0016): checklist yang sudah
   // pernah direalisasi + kerjaan tambahan hari ini, diambil sekali jalan lalu ditempel per
@@ -140,8 +156,8 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
     ...realisasiRows.filter((r) => r.isExtra === 0).map((r) => r.id),
     ...tambahan.map((r) => r.taskLogId),
   ];
-  const kendalaMap = kendalaByTaskLogId(relevantTaskLogIds);
-  const attachmentMap = attachmentsByTaskLogId(relevantTaskLogIds);
+  const kendalaMap = await kendalaByTaskLogId(relevantTaskLogIds);
+  const attachmentMap = await attachmentsByTaskLogId(relevantTaskLogIds);
 
   const checklist = checklistRows.map((r) => {
     const realisasi = realisasiByTask.get(r.taskId);
@@ -160,22 +176,19 @@ export function handleGetDailyInput(req: Request, hariIniOverride?: string): Res
     attachments: attachmentMap.get(r.taskLogId) ?? [],
   }));
 
-  const rencanaHariIni = db
-    .query<ChecklistRow & { catatan: string | null }, [number, string]>(
-      `SELECT tl.task_id AS taskId, tl.catatan, t.deskripsi, t.tag, t.status AS taskStatus, t.project_id AS projectId, p.nama AS projectNama
-       FROM task_logs tl
-       JOIN tasks t ON t.id = tl.task_id
-       JOIN projects p ON p.id = t.project_id
-       WHERE tl.user_id = ? AND tl.tanggal = ? AND tl.jenis = 'rencana'
-       ORDER BY t.deskripsi`,
-    )
-    .all(ctx.user.id, tanggal);
+  const rencanaHariIni = await db
+    .select({ ...taskInfoColumns, catatan: taskLogs.catatan })
+    .from(taskLogs)
+    .innerJoin(tasks, eq(tasks.id, taskLogs.task_id))
+    .innerJoin(projects, eq(projects.id, tasks.project_id))
+    .where(logFilter(ctx.user.id, tanggal, "rencana"))
+    .orderBy(asc(tasks.deskripsi));
 
-  const izin = db
-    .query<{ jenis: "cuti" | "sakit" | "izin"; alasan: string | null }, [number, string]>(
-      "SELECT jenis, alasan FROM leaves WHERE user_id = ? AND tanggal = ?",
-    )
-    .get(ctx.user.id, tanggal);
+  const izin = await db
+    .select({ jenis: leaves.jenis, alasan: leaves.alasan })
+    .from(leaves)
+    .where(and(eq(leaves.user_id, ctx.user.id), eq(leaves.tanggal, tanggal)))
+    .get();
 
   return json({
     tanggal,
@@ -236,12 +249,14 @@ const saveInputSchema = z.object({
 
 type LogItem = z.infer<typeof logItemSchema>;
 
-function getTaskProjectId(taskId: number): number | null {
-  const row = db.query<{ project_id: number }, [number]>("SELECT project_id FROM tasks WHERE id = ?").get(taskId);
+async function getTaskProjectId(taskId: number): Promise<number | null> {
+  const row = await db.select({ project_id: tasks.project_id }).from(tasks).where(eq(tasks.id, taskId)).get();
   return row?.project_id ?? null;
 }
 
+// Dipanggil dari dalam transaksi simpan (callback sinkron, lihat catatan di routes/users.ts).
 function upsertTaskLog(
+  tx: Tx,
   userId: number,
   taskId: number,
   tanggal: string,
@@ -251,41 +266,45 @@ function upsertTaskLog(
 ): number {
   // ADR-0041: satu baris per (user_id, task_id, tanggal, jenis) — submit ulang meng-update,
   // bukan menggandakan.
-  const existing = db
-    .query<{ id: number }, [number, number, string, string]>(
-      "SELECT id FROM task_logs WHERE user_id = ? AND task_id = ? AND tanggal = ? AND jenis = ?",
+  const existing = tx
+    .select({ id: taskLogs.id })
+    .from(taskLogs)
+    .where(
+      and(
+        eq(taskLogs.user_id, userId),
+        eq(taskLogs.task_id, taskId),
+        eq(taskLogs.tanggal, tanggal),
+        eq(taskLogs.jenis, jenis),
+      ),
     )
-    .get(userId, taskId, tanggal, jenis);
+    .get();
 
   if (existing) {
-    db.query("UPDATE task_logs SET catatan = ?, is_extra = ? WHERE id = ?").run(
-      catatan,
-      isExtra ? 1 : 0,
-      existing.id,
-    );
+    tx.update(taskLogs).set({ catatan, is_extra: isExtra ? 1 : 0 }).where(eq(taskLogs.id, existing.id)).run();
     return existing.id;
   }
-  const result = db
-    .query(
-      "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan, is_extra) VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .run(taskId, userId, tanggal, jenis, catatan, isExtra ? 1 : 0);
-  return Number(result.lastInsertRowid);
+  return tx
+    .insert(taskLogs)
+    .values({ task_id: taskId, user_id: userId, tanggal, jenis, catatan, is_extra: isExtra ? 1 : 0 })
+    .returning({ id: taskLogs.id })
+    .get().id;
 }
 
 // ADR-0030 + ADR-0014: null kalau boleh lanjut, Response kalau harus ditolak.
-function validasiRealisasiDiizinkan(
+async function validasiRealisasiDiizinkan(
   userId: number,
   tanggal: string,
   hariIni: string,
   hariKerjaSebelumnya: string,
-): Response | null {
-  if (!realisasiTanggalDiizinkan(tanggal, hariIni)) {
+): Promise<Response | null> {
+  if (!(await realisasiTanggalDiizinkan(tanggal, hariIni))) {
     return errorResponse(400, "Realisasi hari kerja sebelumnya sudah di luar batas edit.");
   }
-  const izinBentrok = db
-    .query<{ id: number }, [number, string]>("SELECT id FROM leaves WHERE user_id = ? AND tanggal = ?")
-    .get(userId, hariKerjaSebelumnya);
+  const izinBentrok = await db
+    .select({ id: leaves.id })
+    .from(leaves)
+    .where(and(eq(leaves.user_id, userId), eq(leaves.tanggal, hariKerjaSebelumnya)))
+    .get();
   if (izinBentrok) {
     return errorResponse(409, "Tanggal itu sudah tercatat sebagai izin/cuti/sakit, realisasi tidak bisa diisi.");
   }
@@ -294,7 +313,7 @@ function validasiRealisasiDiizinkan(
 
 export async function handleSaveDailyInput(req: Request, hariIniOverride?: string): Promise<Response> {
   // Variabel terpisah supaya hasil narrowing tetap terbawa ke closure transaksi di bawah.
-  const auth = requireLogin(req);
+  const auth = await requireLogin(req);
   if (auth instanceof Response) return auth;
   const ctx = auth;
 
@@ -307,11 +326,11 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
   if (!dalamBulanBerjalan(tanggal, hariIni)) {
     return errorResponse(400, "Tanggal laporan di luar bulan berjalan.");
   }
-  const hariKerjaSebelumnya = previousWorkday(tanggal);
+  const hariKerjaSebelumnya = await previousWorkday(tanggal);
 
   const adaRealisasi = parsed.data.items.some((item) => item.jenis === "realisasi");
   if (adaRealisasi) {
-    const gagal = validasiRealisasiDiizinkan(ctx.user.id, tanggal, hariIni, hariKerjaSebelumnya);
+    const gagal = await validasiRealisasiDiizinkan(ctx.user.id, tanggal, hariIni, hariKerjaSebelumnya);
     if (gagal) return gagal;
   }
 
@@ -323,9 +342,9 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
       return errorResponse(400, "Catatan hasil wajib diisi untuk realisasi.");
     }
     if (item.newTask?.projectBaru !== undefined) continue;
-    const projectId = item.newTask?.projectId ?? getTaskProjectId(item.taskId!);
+    const projectId = item.newTask?.projectId ?? (await getTaskProjectId(item.taskId!));
     if (projectId === null) return errorResponse(404, "Task tidak ditemukan.");
-    if (!isActiveProjectMember(ctx.user.id, projectId)) {
+    if (!(await isActiveProjectMember(ctx.user.id, projectId))) {
       return errorResponse(403, "Bukan anggota aktif project ini.");
     }
   }
@@ -333,12 +352,12 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
   // Efek uncheck (ADR-0044): item checklist realisasi yang tadinya tersimpan tapi sekarang
   // tidak lagi ada di items (di-uncheck) dihapus, bukan dibiarkan nyangkut. Cuma untuk item
   // checklist (is_extra=0) — kerjaan tambahan/rencana lain di luar cakupan ini.
-  const checklistTaskIds = db
-    .query<{ taskId: number }, [number, string]>(
-      "SELECT task_id AS taskId FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'rencana'",
-    )
-    .all(ctx.user.id, hariKerjaSebelumnya)
-    .map((r) => r.taskId);
+  const checklistTaskIds = (
+    await db
+      .select({ taskId: taskLogs.task_id })
+      .from(taskLogs)
+      .where(logFilter(ctx.user.id, hariKerjaSebelumnya, "rencana"))
+  ).map((r) => r.taskId);
   const checkedTaskIds = new Set(
     parsed.data.items
       .filter((item) => item.jenis === "realisasi" && !item.isExtra && item.taskId !== undefined)
@@ -354,36 +373,36 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
   // ini tiap item bikin baris projects sendiri-sendiri, jadi N project "Lainnya" duplikat
   // padahal user cuma mau satu.
   const projectBaruCache = new Map<string, number>();
-  function resolveProjectId(newTask: NonNullable<LogItem["newTask"]>): number {
+  function resolveProjectId(tx: Tx, newTask: NonNullable<LogItem["newTask"]>): number {
     if (newTask.projectId !== undefined) return newTask.projectId;
     const nama = newTask.projectBaru!;
     const cached = projectBaruCache.get(nama);
     if (cached !== undefined) return cached;
-    const result = db
-      .query("INSERT INTO projects (nama, is_active, belum_direkonsiliasi) VALUES (?, 1, 1)")
-      .run(nama);
-    const projectId = Number(result.lastInsertRowid);
-    db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
-      ctx!.user.id,
-      projectId,
-    );
+    const projectId = tx
+      .insert(projects)
+      .values({ nama, is_active: 1, belum_direkonsiliasi: 1 })
+      .returning({ id: projects.id })
+      .get().id;
+    tx.insert(userProject).values({ user_id: ctx.user.id, project_id: projectId, ended_at: null }).run();
     projectBaruCache.set(nama, projectId);
     return projectId;
   }
 
-  function saveItem(item: LogItem) {
+  function saveItem(tx: Tx, item: LogItem) {
     let taskId = item.taskId;
     if (taskId === undefined && item.newTask) {
-      const projectId = resolveProjectId(item.newTask);
+      const projectId = resolveProjectId(tx, item.newTask);
       const status = item.newTask.tutupLangsung ? "closed" : "open";
-      const result = db
-        .query("INSERT INTO tasks (project_id, deskripsi, tag, status) VALUES (?, ?, ?, ?)")
-        .run(projectId, item.newTask.deskripsi, item.newTask.tag ?? null, status);
-      taskId = Number(result.lastInsertRowid);
+      taskId = tx
+        .insert(tasks)
+        .values({ project_id: projectId, deskripsi: item.newTask.deskripsi, tag: item.newTask.tag ?? null, status })
+        .returning({ id: tasks.id })
+        .get().id;
     }
     const tanggalItem = item.jenis === "realisasi" ? hariKerjaSebelumnya : tanggal;
     const taskLogId = upsertTaskLog(
-      ctx!.user.id,
+      tx,
+      ctx.user.id,
       taskId!,
       tanggalItem,
       item.jenis,
@@ -393,42 +412,45 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
 
     // Ditulis di sini (transaksi "Simpan" yang sama), bukan saat commit dicentang di modal —
     // draft yang batal/di-refresh sebelum "Simpan" tidak boleh menyisakan data nyantol (ADR-0047,
-    // sama prinsip project "Lainnya"). INSERT OR IGNORE: UNIQUE(ditambahkan_oleh, commit_sha)
+    // sama prinsip project "Lainnya"). ON CONFLICT DO NOTHING: UNIQUE(ditambahkan_oleh, commit_sha)
     // jadi jaring pengaman kalau ada race (mis. dua tab) — gagal diam-diam, bukan error simpan.
     if (item.gitlabCommit) {
-      db.query(
-        `INSERT OR IGNORE INTO task_log_commits
-         (task_log_id, commit_sha, commit_url, pesan, authored_at, ditambahkan_oleh)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(
-        taskLogId,
-        item.gitlabCommit.sha,
-        item.gitlabCommit.commitUrl,
-        item.gitlabCommit.pesan,
-        item.gitlabCommit.authoredAt,
-        ctx!.user.id,
-      );
+      tx.insert(taskLogCommits)
+        .values({
+          task_log_id: taskLogId,
+          commit_sha: item.gitlabCommit.sha,
+          commit_url: item.gitlabCommit.commitUrl,
+          pesan: item.gitlabCommit.pesan,
+          authored_at: item.gitlabCommit.authoredAt,
+          ditambahkan_oleh: ctx.user.id,
+        })
+        .onConflictDoNothing()
+        .run();
     }
   }
 
-  db.transaction(() => {
-    for (const item of parsed.data.items) saveItem(item);
+  // Callback transaksi sinkron (.get/.all/.run), lihat catatan di routes/users.ts.
+  db.transaction((tx) => {
+    for (const item of parsed.data.items) saveItem(tx, item);
     if (uncheckedTaskIds.length > 0) {
-      const placeholders = uncheckedTaskIds.map(() => "?").join(",");
+      const uncheckedWhere = and(
+        eq(taskLogs.user_id, ctx.user.id),
+        eq(taskLogs.tanggal, hariKerjaSebelumnya),
+        eq(taskLogs.jenis, "realisasi"),
+        eq(taskLogs.is_extra, 0),
+        inArray(taskLogs.task_id, uncheckedTaskIds),
+      );
       // Attachment polymorphic TIDAK auto-cascade seperti kendala (bukan FK sungguhan) — ambil
       // id task_log yang mau dihapus DULU, bersihkan attachment-nya (baris DB + file disk)
       // SEBELUM baris task_logs-nya sendiri dihapus, supaya tidak jadi file/baris yatim.
-      const rowsToDelete = db
-        .query<{ id: number }, [number, string, ...number[]]>(
-          `SELECT id FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'realisasi' AND is_extra = 0 AND task_id IN (${placeholders})`,
-        )
-        .all(ctx!.user.id, hariKerjaSebelumnya, ...uncheckedTaskIds);
-      deleteAttachmentsByTaskLogIds(rowsToDelete.map((r) => r.id));
-      db.query(
-        `DELETE FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'realisasi' AND is_extra = 0 AND task_id IN (${placeholders})`,
-      ).run(ctx!.user.id, hariKerjaSebelumnya, ...uncheckedTaskIds);
+      const rowsToDelete = tx.select({ id: taskLogs.id }).from(taskLogs).where(uncheckedWhere).all();
+      deleteAttachmentsByTaskLogIds(
+        tx,
+        rowsToDelete.map((r) => r.id),
+      );
+      tx.delete(taskLogs).where(uncheckedWhere).run();
     }
-  })();
+  });
 
   return json({ tanggal, hariKerjaSebelumnya });
 }

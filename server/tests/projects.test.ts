@@ -11,7 +11,7 @@ import { join } from "node:path";
 // jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini.
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const {
   handleListProjects,
@@ -82,13 +82,13 @@ function req(method: string, path: string, token?: string, body?: unknown): Requ
 }
 
 describe("GET /api/projects", () => {
-  test("ditolak untuk non-admin", () => {
-    const res = handleListProjects(req("GET", "/api/projects", tenagaToken));
+  test("ditolak untuk non-admin", async () => {
+    const res = await handleListProjects(req("GET", "/api/projects", tenagaToken));
     expect(res.status).toBe(403);
   });
 
-  test("ditolak tanpa login", () => {
-    const res = handleListProjects(req("GET", "/api/projects"));
+  test("ditolak tanpa login", async () => {
+    const res = await handleListProjects(req("GET", "/api/projects"));
     expect(res.status).toBe(401);
   });
 });
@@ -141,8 +141,8 @@ describe("Keanggotaan project", () => {
     expect(res.status).toBe(409);
   });
 
-  test("project muncul di daftar 'mine' milik anggotanya", () => {
-    const res = handleListMyProjects(req("GET", "/api/projects/mine", tenagaToken));
+  test("project muncul di daftar 'mine' milik anggotanya", async () => {
+    const res = await handleListMyProjects(req("GET", "/api/projects/mine", tenagaToken));
     expect(res.status).toBe(200);
   });
 
@@ -200,8 +200,8 @@ describe("isActiveProjectMember", () => {
     );
   });
 
-  test("true untuk anggota aktif", () => {
-    expect(isActiveProjectMember(tenagaId, projectId)).toBe(true);
+  test("true untuk anggota aktif", async () => {
+    expect(await isActiveProjectMember(tenagaId, projectId)).toBe(true);
   });
 
   test("false untuk user yang bukan anggota project itu", async () => {
@@ -209,7 +209,7 @@ describe("isActiveProjectMember", () => {
       req("POST", "/api/projects", adminToken, { nama: "Project Lain", isActive: true }),
     );
     const body = (await res.json()) as { project: { id: number } };
-    expect(isActiveProjectMember(tenagaId, body.project.id)).toBe(false);
+    expect(await isActiveProjectMember(tenagaId, body.project.id)).toBe(false);
   });
 
   test("false setelah keluar project (ended_at terisi)", async () => {
@@ -218,11 +218,11 @@ describe("isActiveProjectMember", () => {
       projectId,
       tenagaId,
     );
-    expect(isActiveProjectMember(tenagaId, projectId)).toBe(false);
+    expect(await isActiveProjectMember(tenagaId, projectId)).toBe(false);
   });
 
-  test("false untuk project yang tidak ada", () => {
-    expect(isActiveProjectMember(tenagaId, 999999)).toBe(false);
+  test("false untuk project yang tidak ada", async () => {
+    expect(await isActiveProjectMember(tenagaId, 999999)).toBe(false);
   });
 });
 
@@ -242,7 +242,7 @@ describe("PUT /api/projects/:id", () => {
 describe("POST /api/projects/:id/konfirmasi", () => {
   let usulanId: number;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     usulanId = createPendingProject("Usulan Konfirmasi", tenagaId);
   });
 
@@ -312,7 +312,7 @@ describe("POST /api/projects/:id/gabung", () => {
       .get("Task di project usulan");
     expect(task?.project_id).toBe(targetId);
 
-    expect(isActiveProjectMember(tenagaId, targetId)).toBe(true);
+    expect(await isActiveProjectMember(tenagaId, targetId)).toBe(true);
 
     const stillExists = db.query<{ id: number }, [number]>("SELECT id FROM projects WHERE id = ?").get(usulanId);
     expect(stillExists).toBeNull();

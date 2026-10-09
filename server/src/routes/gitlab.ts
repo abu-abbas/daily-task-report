@@ -1,6 +1,8 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
+import { taskLogCommits, users } from "../schema";
 import { errorResponse, json } from "../http";
 import type { AuthContext } from "../types";
 import { errorMeta, log } from "../logger";
@@ -28,7 +30,7 @@ function requireGitlabToken(ctx: AuthContext): string | Response {
 // Daftar repo GitLab yang bisa diakses token ini — dipilih user LEBIH DULU sebelum commit
 // di-fetch (lihat handleListGitlabCommits), supaya fetch commit gak perlu nge-loop semua repo.
 export async function handleListGitlabProjects(req: Request): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const gitlabToken = requireGitlabToken(ctx);
@@ -46,7 +48,7 @@ export async function handleListGitlabProjects(req: Request): Promise<Response> 
 // Lazy per tanggal+repo (ADR-0047) — dipanggil cuma setelah user pilih repo GitLab di modal
 // "Impor commit GitLab", bukan prefetch atau nge-loop semua repo yang bisa diakses.
 export async function handleListGitlabCommits(req: Request): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const gitlabToken = requireGitlabToken(ctx);
@@ -71,12 +73,10 @@ export async function handleListGitlabCommits(req: Request): Promise<Response> {
     const shas = commits.map((c) => c.sha);
     const imported = new Set<string>();
     if (shas.length > 0) {
-      const placeholders = shas.map(() => "?").join(",");
-      const rows = db
-        .query<{ commit_sha: string }, [number, ...string[]]>(
-          `SELECT commit_sha FROM task_log_commits WHERE ditambahkan_oleh = ? AND commit_sha IN (${placeholders})`,
-        )
-        .all(ctx.user.id, ...shas);
+      const rows = await db
+        .select({ commit_sha: taskLogCommits.commit_sha })
+        .from(taskLogCommits)
+        .where(and(eq(taskLogCommits.ditambahkan_oleh, ctx.user.id), inArray(taskLogCommits.commit_sha, shas)));
       for (const r of rows) imported.add(r.commit_sha);
     }
 
@@ -93,7 +93,7 @@ const saveTokenSchema = z.object({ token: z.string().min(1, "Token wajib diisi."
 // dicocokkan ke email akun yang login) — token yang gagal/invalid tidak pernah ditulis ke DB,
 // jadi kolom lama tidak ketiban token baru yang ternyata salah.
 export async function handleSaveGitlabToken(req: Request): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!gitlabHostConfigured()) {
@@ -121,9 +121,14 @@ export async function handleSaveGitlabToken(req: Request): Promise<Response> {
     );
   }
 
-  db.query(
-    "UPDATE users SET gitlab_username = ?, gitlab_avatar_url = ?, gitlab_private_token = ? WHERE id = ?",
-  ).run(identity.username, identity.avatarUrl, parsed.data.token, ctx.user.id);
+  await db
+    .update(users)
+    .set({
+      gitlab_username: identity.username,
+      gitlab_avatar_url: identity.avatarUrl,
+      gitlab_private_token: parsed.data.token,
+    })
+    .where(eq(users.id, ctx.user.id));
 
   return json({ gitlabUsername: identity.username, gitlabAvatarUrl: identity.avatarUrl });
 }

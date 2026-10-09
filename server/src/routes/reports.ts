@@ -1,5 +1,7 @@
 import { requireLogin } from "../authz";
+import { and, asc, eq, inArray, like } from "drizzle-orm";
 import { db } from "../db";
+import { attachments, leaves, projects, taskLogs, tasks as tasksTable } from "../schema";
 import { errorResponse, json } from "../http";
 import { isWorkday, todayJakarta } from "../kalender";
 import { absoluteAttachmentPath } from "../storage";
@@ -73,17 +75,22 @@ interface AggregatedReport {
 // — query task_logs realisasi, nomor task tetap, kalender hari (isWorkday/izin), dan attachment
 // per log (metadata saja, BUKAN bytes — itu cuma dibaca saat benar-benar bikin PDF).
 async function aggregateMonthlyReport(userId: number, bulan: string): Promise<AggregatedReport> {
-  const rows = db
-    .query<RealisasiRow, [number, string]>(
-      `SELECT tl.id AS taskLogId, tl.task_id AS taskId, t.deskripsi, t.tag, t.status AS taskStatus,
-              p.nama AS projectNama, tl.tanggal, tl.catatan
-       FROM task_logs tl
-       JOIN tasks t ON t.id = tl.task_id
-       JOIN projects p ON p.id = t.project_id
-       WHERE tl.user_id = ? AND tl.jenis = 'realisasi' AND tl.tanggal LIKE ? || '%'
-       ORDER BY tl.tanggal ASC, t.id ASC`,
-    )
-    .all(userId, bulan);
+  const rows: RealisasiRow[] = await db
+    .select({
+      taskLogId: taskLogs.id,
+      taskId: taskLogs.task_id,
+      deskripsi: tasksTable.deskripsi,
+      tag: tasksTable.tag,
+      taskStatus: tasksTable.status,
+      projectNama: projects.nama,
+      tanggal: taskLogs.tanggal,
+      catatan: taskLogs.catatan,
+    })
+    .from(taskLogs)
+    .innerJoin(tasksTable, eq(tasksTable.id, taskLogs.task_id))
+    .innerJoin(projects, eq(projects.id, tasksTable.project_id))
+    .where(and(eq(taskLogs.user_id, userId), eq(taskLogs.jenis, "realisasi"), like(taskLogs.tanggal, `${bulan}%`)))
+    .orderBy(asc(taskLogs.tanggal), asc(tasksTable.id));
 
   // Nomor task tetap (dipakai ulang di timesheet dan tabel aktifitas) — urutan kemunculan
   // pertama pada bulan itu, bukan penomoran ulang per baris aktifitas.
@@ -103,14 +110,11 @@ async function aggregateMonthlyReport(userId: number, bulan: string): Promise<Ag
   const taskLogIds = rows.map((r) => r.taskLogId);
   const attachmentsByLog = new Map<number, AttachmentRow[]>();
   if (taskLogIds.length > 0) {
-    const placeholders = taskLogIds.map(() => "?").join(",");
-    const attachmentRows = db
-      .query<AttachmentRow, number[]>(
-        `SELECT attachable_id AS taskLogId, file_path AS filePath, file_type AS fileType
-         FROM attachments WHERE attachable_type = 'task_log' AND attachable_id IN (${placeholders})
-         ORDER BY id ASC`,
-      )
-      .all(...taskLogIds);
+    const attachmentRows: AttachmentRow[] = await db
+      .select({ taskLogId: attachments.attachable_id, filePath: attachments.file_path, fileType: attachments.file_type })
+      .from(attachments)
+      .where(and(eq(attachments.attachable_type, "task_log"), inArray(attachments.attachable_id, taskLogIds)))
+      .orderBy(asc(attachments.id));
     for (const a of attachmentRows) {
       const list = attachmentsByLog.get(a.taskLogId) ?? [];
       list.push(a);
@@ -118,18 +122,17 @@ async function aggregateMonthlyReport(userId: number, bulan: string): Promise<Ag
     }
   }
 
-  const izinRows = db
-    .query<{ tanggal: string }, [number, string]>(
-      "SELECT tanggal FROM leaves WHERE user_id = ? AND tanggal LIKE ? || '%'",
-    )
-    .all(userId, bulan);
+  const izinRows = await db
+    .select({ tanggal: leaves.tanggal })
+    .from(leaves)
+    .where(and(eq(leaves.user_id, userId), like(leaves.tanggal, `${bulan}%`)));
   const izinSet = new Set(izinRows.map((r) => r.tanggal));
 
   const hari: ReportHari[] = [];
   const total = daysInMonth(bulan);
   for (let d = 1; d <= total; d++) {
     const tanggal = `${bulan}-${String(d).padStart(2, "0")}`;
-    hari.push({ tanggal, isWorkday: isWorkday(tanggal), isIzin: izinSet.has(tanggal) });
+    hari.push({ tanggal, isWorkday: await isWorkday(tanggal), isIzin: izinSet.has(tanggal) });
   }
 
   const [tahun, bulanAngka] = bulan.split("-").map(Number);
@@ -184,7 +187,7 @@ async function buildLampiranDanAktivitas(
 // Cicilan awal Stage 7 (ADR-0019) — laporan PDF generik satu layout, tanpa template Word (itu
 // masih menunggu Q-06). Cakupan diri-sendiri saja, sama seperti Riwayat.
 export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
@@ -223,14 +226,14 @@ export async function handleMonthlyReportPdf(req: Request): Promise<Response> {
 // file template masing-masing orang; di sini cuma isi placeholder nama/timesheet/tabel
 // aktifitas/lampiran/saran. Tidak ada gate — saran kosong cukup dirender kosong.
 export async function handleMonthlyReportWord(req: Request): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
   const bulan = url.searchParams.get("bulan");
   if (!bulan || !BULAN_RE.test(bulan)) return errorResponse(400, "Format bulan tidak valid (YYYY-MM).");
 
-  const templatePath = getLaporanTemplatePath(ctx.user.id);
+  const templatePath = await getLaporanTemplatePath(ctx.user.id);
   if (!templatePath) {
     return errorResponse(409, "Anda belum mengunggah template Word. Unggah dulu sebelum mengunduh laporan.");
   }
@@ -261,7 +264,7 @@ export async function handleMonthlyReportWord(req: Request): Promise<Response> {
       taskDatesWorked: agg.taskDatesWorked,
       aktivitas,
       lampiran,
-      saranLines: getSaranLines(ctx.user.id, bulan),
+      saranLines: await getSaranLines(ctx.user.id, bulan),
     });
   } catch (err) {
     // Template rusak/tidak sesuai format docx yang bisa dibaca docxtemplater — pesan jelas,
@@ -284,7 +287,7 @@ export async function handleMonthlyReportWord(req: Request): Promise<Response> {
 // Pratinjau di layar sebelum cetak (ADR-0019 "Rencana lanjutan") — supaya user bisa mengecek ada
 // tidaknya hari kerja yang masih kosong (belum ada realisasi) sebelum benar-benar mengunduh PDF.
 export async function handleMonthlyReportPreview(req: Request, hariIniOverride?: string): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);

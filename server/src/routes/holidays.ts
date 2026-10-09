@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
+import { asc, eq } from "drizzle-orm";
 import { db } from "../db";
+import { holidays } from "../schema";
 import { errorResponse, json } from "../http";
 import { requireAdmin, requireLogin } from "../authz";
 
@@ -27,20 +29,16 @@ const holidayPayloadSchema = z.object({
 
 // Baca daftar libur tidak dibatasi admin — dipakai semua user untuk penelusuran hari
 // kerja sebelumnya (ADR-0006/ADR-0026) begitu Stage 3 dibangun, bukan cuma untuk admin.
-export function handleListHolidays(req: Request): Response {
-  const ctx = requireLogin(req);
+export async function handleListHolidays(req: Request): Promise<Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
-  const rows = db
-    .query<HolidayRow, []>(
-      "SELECT id, nama, tanggal_mulai, tanggal_akhir FROM holidays ORDER BY tanggal_mulai",
-    )
-    .all();
+  const rows: HolidayRow[] = await db.select().from(holidays).orderBy(asc(holidays.tanggal_mulai));
   return json({ holidays: rows.map(publicHoliday) });
 }
 
 export async function handleCreateHoliday(req: Request): Promise<Response> {
-  const ctx = requireAdmin(req);
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
   const body = await req.json().catch(() => null);
@@ -51,26 +49,25 @@ export async function handleCreateHoliday(req: Request): Promise<Response> {
     return errorResponse(400, "Tanggal akhir tidak boleh sebelum tanggal mulai.");
   }
 
-  const result = db
-    .query("INSERT INTO holidays (nama, tanggal_mulai, tanggal_akhir) VALUES (?, ?, ?)")
-    .run(parsed.data.nama, parsed.data.tanggalMulai, parsed.data.tanggalAkhir);
-
-  const row = db
-    .query<HolidayRow, [number]>(
-      "SELECT id, nama, tanggal_mulai, tanggal_akhir FROM holidays WHERE id = ?",
-    )
-    .get(Number(result.lastInsertRowid))!;
-  return json({ holiday: publicHoliday(row) }, { status: 201 });
+  const [row] = await db
+    .insert(holidays)
+    .values({
+      nama: parsed.data.nama,
+      tanggal_mulai: parsed.data.tanggalMulai,
+      tanggal_akhir: parsed.data.tanggalAkhir,
+    })
+    .returning();
+  return json({ holiday: publicHoliday(row!) }, { status: 201 });
 }
 
 export async function handleDeleteHoliday(req: Request, id: number): Promise<Response> {
-  const ctx = requireAdmin(req);
+  const ctx = await requireAdmin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!Number.isInteger(id)) return errorResponse(400, "ID tidak valid.");
-  const existing = db.query<{ id: number }, [number]>("SELECT id FROM holidays WHERE id = ?").get(id);
+  const existing = await db.select({ id: holidays.id }).from(holidays).where(eq(holidays.id, id)).get();
   if (!existing) return errorResponse(404, "Data libur tidak ditemukan.");
 
-  db.query("DELETE FROM holidays WHERE id = ?").run(id);
+  await db.delete(holidays).where(eq(holidays.id, id));
   return new Response(null, { status: 204 });
 }

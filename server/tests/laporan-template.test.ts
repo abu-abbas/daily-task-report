@@ -6,7 +6,7 @@ import PizZip from "pizzip";
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations, storageDir } = await import("../src/db");
+const { sqlite: db, runMigrations, storageDir } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleGetMyLaporanTemplate, handleUploadLaporanTemplate, handleDeleteLaporanTemplate, getLaporanTemplatePath } =
   await import("../src/routes/laporan-template");
@@ -98,7 +98,7 @@ describe("POST /api/laporan-template", () => {
     const body = (await res.json()) as { template: { namaAsli: string } };
     expect(body.template.namaAsli).toBe("Template Saya.docx");
 
-    const path = getLaporanTemplatePath(tenagaId);
+    const path = await getLaporanTemplatePath(tenagaId);
     expect(path).not.toBeNull();
     expect(existsSync(path!)).toBe(true);
     expect(path!.startsWith(storageDir)).toBe(true);
@@ -124,11 +124,11 @@ describe("DELETE /api/laporan-template", () => {
   });
 
   test("berhasil hapus, file hilang dari disk", async () => {
-    const path = getLaporanTemplatePath(tenagaId)!;
+    const path = await getLaporanTemplatePath(tenagaId)!;
     const res = await handleDeleteLaporanTemplate(req("DELETE", "/api/laporan-template", tenagaToken));
     expect(res.status).toBe(204);
     expect(existsSync(path)).toBe(false);
-    expect(getLaporanTemplatePath(tenagaId)).toBeNull();
+    expect(await getLaporanTemplatePath(tenagaId)).toBeNull();
   });
 
   test("404 kalau sudah tidak ada", async () => {

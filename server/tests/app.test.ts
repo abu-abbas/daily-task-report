@@ -6,7 +6,7 @@ import { join } from "node:path";
 // Lihat users.test.ts soal kenapa DATABASE_PATH dipaksa timpa sebelum import.
 process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
-const { db, runMigrations } = await import("../src/db");
+const { sqlite: db, runMigrations } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { app } = await import("../src/app");
 const { logDir } = await import("../src/logger");

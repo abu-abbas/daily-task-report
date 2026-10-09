@@ -1,5 +1,7 @@
 import { requireLogin } from "../authz";
+import { and, asc, count, desc, eq, gte, lt, lte, or } from "drizzle-orm";
 import { db } from "../db";
+import { leaves, projects, taskLogs, tasks } from "../schema";
 import { errorResponse, json } from "../http";
 import { dalamBulanBerjalan, todayJakarta } from "../kalender";
 import { attachmentsByTaskLogId, kendalaByTaskLogId } from "./task-logs";
@@ -36,8 +38,8 @@ function rentangHeatmap(hariIni: string): { dari: string; sampai: string } {
 // (bukan rencana, bukan izin, ADR-0034 tetap baca-sendiri tanpa batas bulan). Dipakai
 // RiwayatView.vue sebagai satu-satunya ringkasan; klik kotak baru fetch detail lewat
 // handleGetRiwayatDetail di bawah.
-export function handleGetActivityHeatmap(req: Request, hariIniOverride?: string): Response {
-  const ctx = requireLogin(req);
+export async function handleGetActivityHeatmap(req: Request, hariIniOverride?: string): Promise<Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
@@ -46,15 +48,20 @@ export function handleGetActivityHeatmap(req: Request, hariIniOverride?: string)
 
   const { dari, sampai } = rentangHeatmap(hariIniOverride ?? todayJakarta());
 
-  const rows = db
-    .query<{ tanggal: string; c: number }, (number | string)[]>(
-      `SELECT tl.tanggal, COUNT(*) AS c FROM task_logs tl
-       JOIN tasks t ON t.id = tl.task_id
-       WHERE tl.user_id = ? AND tl.jenis = 'realisasi' AND tl.tanggal >= ? AND tl.tanggal <= ?
-       ${projectId ? "AND t.project_id = ?" : ""}
-       GROUP BY tl.tanggal`,
+  const rows = await db
+    .select({ tanggal: taskLogs.tanggal, c: count() })
+    .from(taskLogs)
+    .innerJoin(tasks, eq(tasks.id, taskLogs.task_id))
+    .where(
+      and(
+        eq(taskLogs.user_id, ctx.user.id),
+        eq(taskLogs.jenis, "realisasi"),
+        gte(taskLogs.tanggal, dari),
+        lte(taskLogs.tanggal, sampai),
+        projectId ? eq(tasks.project_id, projectId) : undefined,
+      ),
     )
-    .all(...(projectId ? [ctx.user.id, dari, sampai, projectId] : [ctx.user.id, dari, sampai]));
+    .groupBy(taskLogs.tanggal);
 
   const hari = rows.map((r) => ({ tanggal: r.tanggal, realisasiCount: r.c }));
 
@@ -93,8 +100,8 @@ const TANGGAL_FILTER_LIMIT = 200;
 // - dengan `tanggal`: heatmap diklik untuk memfilter feed ke satu tanggal itu saja (bukan buka
 //   Dialog langsung — hindari dua jalur "lihat detail" yang tumpang tindih); tidak dipaginasi,
 //   `cursor` diabaikan kalau `tanggal` ada.
-export function handleListActivityLog(req: Request): Response {
-  const ctx = requireLogin(req);
+export async function handleListActivityLog(req: Request): Promise<Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   const url = new URL(req.url);
@@ -106,33 +113,35 @@ export function handleListActivityLog(req: Request): Response {
   }
   const cursor = tanggalFilter ? null : parseCursor(url.searchParams.get("cursor"));
 
-  const params: (number | string)[] = [ctx.user.id];
-  let where = "tl.user_id = ? AND tl.jenis = 'realisasi'";
-  if (projectId) {
-    where += " AND t.project_id = ?";
-    params.push(projectId);
-  }
-  if (tanggalFilter) {
-    where += " AND tl.tanggal = ?";
-    params.push(tanggalFilter);
-  } else if (cursor) {
-    where += " AND (tl.tanggal < ? OR (tl.tanggal = ? AND tl.id < ?))";
-    params.push(cursor.tanggal, cursor.tanggal, cursor.taskLogId);
-  }
   const limit = tanggalFilter ? TANGGAL_FILTER_LIMIT : LOG_PAGE_SIZE + 1;
-  params.push(limit);
 
-  const rows = db
-    .query<ActivityLogRow, (number | string)[]>(
-      `SELECT tl.id AS taskLogId, tl.tanggal, t.deskripsi, t.tag, p.nama AS projectNama
-       FROM task_logs tl
-       JOIN tasks t ON t.id = tl.task_id
-       JOIN projects p ON p.id = t.project_id
-       WHERE ${where}
-       ORDER BY tl.tanggal DESC, tl.id DESC
-       LIMIT ?`,
+  const rows: ActivityLogRow[] = await db
+    .select({
+      taskLogId: taskLogs.id,
+      tanggal: taskLogs.tanggal,
+      deskripsi: tasks.deskripsi,
+      tag: tasks.tag,
+      projectNama: projects.nama,
+    })
+    .from(taskLogs)
+    .innerJoin(tasks, eq(tasks.id, taskLogs.task_id))
+    .innerJoin(projects, eq(projects.id, tasks.project_id))
+    .where(
+      and(
+        eq(taskLogs.user_id, ctx.user.id),
+        eq(taskLogs.jenis, "realisasi"),
+        projectId ? eq(tasks.project_id, projectId) : undefined,
+        tanggalFilter ? eq(taskLogs.tanggal, tanggalFilter) : undefined,
+        !tanggalFilter && cursor
+          ? or(
+              lt(taskLogs.tanggal, cursor.tanggal),
+              and(eq(taskLogs.tanggal, cursor.tanggal), lt(taskLogs.id, cursor.taskLogId)),
+            )
+          : undefined,
+      ),
     )
-    .all(...params);
+    .orderBy(desc(taskLogs.tanggal), desc(taskLogs.id))
+    .limit(limit);
 
   if (tanggalFilter) return json({ items: rows, nextCursor: null });
 
@@ -144,27 +153,38 @@ export function handleListActivityLog(req: Request): Response {
   return json({ items, nextCursor });
 }
 
-export function handleGetRiwayatDetail(req: Request, tanggal: string, hariIniOverride?: string): Response {
-  const ctx = requireLogin(req);
+export async function handleGetRiwayatDetail(
+  req: Request,
+  tanggal: string,
+  hariIniOverride?: string,
+): Promise<Response> {
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!TANGGAL_RE.test(tanggal)) return errorResponse(400, "Format tanggal tidak valid.");
 
-  const rows = db
-    .query<RiwayatLogRow, [number, string]>(
-      `SELECT tl.id AS taskLogId, tl.task_id AS taskId, t.deskripsi, t.tag, t.status AS taskStatus,
-              t.project_id AS projectId, p.nama AS projectNama, tl.jenis, tl.is_extra AS isExtra, tl.catatan
-       FROM task_logs tl
-       JOIN tasks t ON t.id = tl.task_id
-       JOIN projects p ON p.id = t.project_id
-       WHERE tl.user_id = ? AND tl.tanggal = ?
-       ORDER BY p.nama, t.deskripsi`,
-    )
-    .all(ctx.user.id, tanggal);
+  const rows: RiwayatLogRow[] = await db
+    .select({
+      taskLogId: taskLogs.id,
+      taskId: taskLogs.task_id,
+      deskripsi: tasks.deskripsi,
+      tag: tasks.tag,
+      taskStatus: tasks.status,
+      projectId: tasks.project_id,
+      projectNama: projects.nama,
+      jenis: taskLogs.jenis,
+      isExtra: taskLogs.is_extra,
+      catatan: taskLogs.catatan,
+    })
+    .from(taskLogs)
+    .innerJoin(tasks, eq(tasks.id, taskLogs.task_id))
+    .innerJoin(projects, eq(projects.id, tasks.project_id))
+    .where(and(eq(taskLogs.user_id, ctx.user.id), eq(taskLogs.tanggal, tanggal)))
+    .orderBy(asc(projects.nama), asc(tasks.deskripsi));
 
   const realisasiTaskLogIds = rows.filter((r) => r.jenis === "realisasi").map((r) => r.taskLogId);
-  const kendalaMap = kendalaByTaskLogId(realisasiTaskLogIds);
-  const attachmentMap = attachmentsByTaskLogId(realisasiTaskLogIds);
+  const kendalaMap = await kendalaByTaskLogId(realisasiTaskLogIds);
+  const attachmentMap = await attachmentsByTaskLogId(realisasiTaskLogIds);
 
   const items = rows.map((r) => ({
     taskLogId: r.taskLogId,
@@ -181,11 +201,11 @@ export function handleGetRiwayatDetail(req: Request, tanggal: string, hariIniOve
     attachments: attachmentMap.get(r.taskLogId) ?? [],
   }));
 
-  const izin = db
-    .query<{ jenis: "cuti" | "sakit" | "izin"; alasan: string | null }, [number, string]>(
-      "SELECT jenis, alasan FROM leaves WHERE user_id = ? AND tanggal = ?",
-    )
-    .get(ctx.user.id, tanggal);
+  const izin = await db
+    .select({ jenis: leaves.jenis, alasan: leaves.alasan })
+    .from(leaves)
+    .where(and(eq(leaves.user_id, ctx.user.id), eq(leaves.tanggal, tanggal)))
+    .get();
 
   const hariIni = hariIniOverride ?? todayJakarta();
   const bolehEdit = dalamBulanBerjalan(tanggal, hariIni);

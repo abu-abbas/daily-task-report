@@ -1,6 +1,8 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db";
+import { leaves, taskLogs } from "../schema";
 import { errorResponse, json } from "../http";
 import { dalamBulanBerjalan, todayJakarta } from "../kalender";
 
@@ -17,7 +19,7 @@ const saveLeaveSchema = z.object({
 // tetap null (tidak menghitung kuota cuti, di luar cakupan stage ini).
 // hariIniOverride: test-only, pola sama seperti handleSaveDailyInput di routes/task-logs.ts.
 export async function handleSaveLeave(req: Request, hariIniOverride?: string): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
   const userId = ctx.user.id;
 
@@ -33,41 +35,44 @@ export async function handleSaveLeave(req: Request, hariIniOverride?: string): P
   }
 
   // ADR-0014: tanggal yang sudah punya realisasi tidak boleh sekaligus jadi izin.
-  const realisasiBentrok = db
-    .query<{ id: number }, [number, string]>(
-      "SELECT id FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'realisasi'",
-    )
-    .get(userId, tanggal);
+  const realisasiBentrok = await db
+    .select({ id: taskLogs.id })
+    .from(taskLogs)
+    .where(and(eq(taskLogs.user_id, userId), eq(taskLogs.tanggal, tanggal), eq(taskLogs.jenis, "realisasi")))
+    .get();
   if (realisasiBentrok) {
     return errorResponse(409, "Tanggal itu sudah punya realisasi tersimpan, tidak bisa jadi izin/cuti/sakit.");
   }
 
-  db.transaction(() => {
-    const existing = db
-      .query<{ id: number }, [number, string]>("SELECT id FROM leaves WHERE user_id = ? AND tanggal = ?")
-      .get(userId, tanggal);
+  // Callback transaksi sinkron (.get/.run), lihat catatan di routes/users.ts.
+  db.transaction((tx) => {
+    const existing = tx
+      .select({ id: leaves.id })
+      .from(leaves)
+      .where(and(eq(leaves.user_id, userId), eq(leaves.tanggal, tanggal)))
+      .get();
     if (existing) {
-      db.query("UPDATE leaves SET jenis = ?, alasan = ? WHERE id = ?").run(jenis, alasan, existing.id);
+      tx.update(leaves).set({ jenis, alasan }).where(eq(leaves.id, existing.id)).run();
     } else {
-      db.query(
-        "INSERT INTO leaves (user_id, tanggal, jenis, alasan, potong_cuti_tahunan) VALUES (?, ?, ?, ?, NULL)",
-      ).run(userId, tanggal, jenis, alasan);
+      tx.insert(leaves).values({ user_id: userId, tanggal, jenis, alasan, potong_cuti_tahunan: null }).run();
     }
     // Rencana yang sudah tersimpan di tanggal ini otomatis dihapus — izin dan rencana tidak
     // boleh coexist di tanggal yang sama (keputusan produk, melengkapi ADR-0014 yang eksplisit
     // baru menyebut realisasi).
-    db.query("DELETE FROM task_logs WHERE user_id = ? AND tanggal = ? AND jenis = 'rencana'").run(userId, tanggal);
-  })();
+    tx.delete(taskLogs)
+      .where(and(eq(taskLogs.user_id, userId), eq(taskLogs.tanggal, tanggal), eq(taskLogs.jenis, "rencana")))
+      .run();
+  });
 
   return json({ tanggal, jenis, alasan });
 }
 
 export async function handleCancelLeave(req: Request, tanggal: string): Promise<Response> {
-  const ctx = requireLogin(req);
+  const ctx = await requireLogin(req);
   if (ctx instanceof Response) return ctx;
 
   if (!TANGGAL_RE.test(tanggal)) return errorResponse(400, "Format tanggal tidak valid.");
 
-  db.query("DELETE FROM leaves WHERE user_id = ? AND tanggal = ?").run(ctx.user.id, tanggal);
+  await db.delete(leaves).where(and(eq(leaves.user_id, ctx.user.id), eq(leaves.tanggal, tanggal)));
   return json({ tanggal });
 }
