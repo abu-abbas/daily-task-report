@@ -10,8 +10,12 @@ export function gitlabHostConfigured(): boolean {
   return Boolean(GITLAB_URL);
 }
 
+// Fallback token .env hanya untuk development. Di produksi semua user akan ikut memakai token
+// pemiliknya dan bisa melihat repo milik orang itu, jadi tiap user wajib mengisi token sendiri.
 export function resolveGitlabToken(userToken: string | null): string | null {
-  return userToken || process.env.GITLAB_SELFHOSTED_PRIVATE_TOKEN || null;
+  if (userToken) return userToken;
+  if (process.env.NODE_ENV === "production") return null;
+  return process.env.GITLAB_SELFHOSTED_PRIVATE_TOKEN || null;
 }
 
 interface GitlabProject {

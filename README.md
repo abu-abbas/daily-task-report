@@ -25,7 +25,24 @@ bun run dev:server                      # terminal 1 — backend di :3001
 bun run dev:frontend                    # terminal 2 — frontend di :5173, proxy /api ke backend
 ```
 
-Buka `http://localhost:5173`. Login butuh user dengan `password_hash` terisi; belum ada halaman registrasi/seed otomatis, jadi user pertama (admin) dibuat manual langsung ke database (hash password dengan `Bun.password.hash`, lalu insert ke tabel `users`/`user_roles`). Setelah itu, pengelolaan user selanjutnya lewat halaman Kelola User (`/admin/users`).
+Buka `http://localhost:5173`. Belum ada halaman registrasi, jadi buat admin pertama lewat skrip (login memakai email, jadi `--email` adalah username-nya):
+
+```sh
+bun --cwd=server run buat-admin --email admin@kantor.go.id --password 'rahasia123' --nama 'Admin'
+```
+
+Password ditulis polos di perintah lalu di-hash Argon2id sebelum disimpan. Kalau email itu sudah ada, akunnya dijadikan admin dan passwordnya diganti, jadi skrip yang sama bisa dipakai saat admin lupa password. Di server, awali perintah dengan spasi atau bersihkan history shell supaya passwordnya tidak tersimpan. Setelah itu, pengelolaan user selanjutnya lewat halaman Kelola User (`/admin/users`).
+
+### Menjalankan di server
+
+Rincian lengkapnya ada di checklist kesiapan produksi; intinya:
+
+- Isi `DATABASE_URL` (Postgres), `NODE_ENV=production` (cookie sesi diberi flag `Secure`), `TZ=Asia/Jakarta`, dan `DATA_DIR` di disk yang persisten.
+- Build frontend (`bun --cwd=frontend run build`) lalu sajikan `frontend/dist` lewat reverse proxy HTTPS (nginx/Caddy): `/api` diteruskan ke backend, path lain jatuh ke `index.html`. Naikkan batas body proxy ke minimal 20 MB (template Word).
+- Di belakang proxy, set `TRUST_PROXY=1` dan teruskan IP klien lewat header `X-Real-IP` supaya pembatas login per IP bekerja.
+- Jalankan `bun --cwd=server run start` lewat systemd atau Docker. Migration jalan otomatis saat startup, `GET /api/health` bisa dipakai sebagai health check, dan `SIGTERM` menghentikan server dengan rapi.
+- Login gagal dibatasi 10 kali per email dan 50 kali per IP dalam 15 menit (bisa diubah lewat env, lihat `server/.env.example`).
+- Di produksi, token GitLab bersama `GITLAB_SELFHOSTED_PRIVATE_TOKEN` diabaikan; tiap user mengisi token GitLab sendiri.
 
 ### Pindah dari SQLite lama
 

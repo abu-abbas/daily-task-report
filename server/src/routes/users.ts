@@ -4,6 +4,7 @@ import { db, isUniqueViolation, first } from "../db";
 import { userRoles, users } from "../schema";
 import { errorResponse, json } from "../http";
 import { requireAdmin } from "../authz";
+import { parseCookie, revokeUserSessions, SESSION_COOKIE } from "../auth";
 import type { Role } from "../types";
 
 const ROLE_VALUES = ["tenaga_ahli", "supervisi", "atasan", "admin"] as const;
@@ -159,6 +160,11 @@ export async function handleUpdateUser(req: Request, id: number): Promise<Respon
         .where(eq(users.id, id));
       await tx.delete(userRoles).where(eq(userRoles.user_id, id));
       await tx.insert(userRoles).values(parsed.data.roles.map((role) => ({ user_id: id, role })));
+      // Password baru mengakhiri sesi lama user itu, kecuali sesi admin yang sedang mengubahnya.
+      if (passwordHash) {
+        const currentToken = id === ctx.user.id ? parseCookie(req.headers.get("Cookie"), SESSION_COOKIE) : undefined;
+        await revokeUserSessions(id, currentToken, tx);
+      }
     });
   } catch (err) {
     if (isUniqueViolation(err)) return errorResponse(409, "Email sudah dipakai.");

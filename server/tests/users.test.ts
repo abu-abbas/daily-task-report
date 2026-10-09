@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 
 const { runMigrations } = await import("../src/db");
 const { db } = await import("./raw-db");
-const { login } = await import("../src/auth");
+const { login, getAuthContext } = await import("../src/auth");
 const { handleListUsers, handleCreateUser, handleUpdateUser } = await import("../src/routes/users");
 
 const ADMIN_EMAIL = "admin@example.test";
@@ -196,5 +196,28 @@ describe("PUT /api/users/:id", () => {
       9999,
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("PUT /api/users/:id mengganti password", () => {
+  test("mengakhiri sesi lama user itu, tapi tidak sesi admin yang mengubah dirinya sendiri", async () => {
+    const email = "ganti.password@example.test";
+    const { lastInsertRowid: id } = await db
+      .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
+      .run("Ganti Password", email, await Bun.password.hash(PASSWORD));
+    await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(id);
+    const lama = (await login(email, PASSWORD))!.token;
+
+    const payload = { nama: "Ganti Password", email, password: "password-baru-1", roles: ["tenaga_ahli"], atasanId: null, supervisiId: null };
+    expect((await handleUpdateUser(req("PUT", `/api/users/${id}`, adminToken, payload), id)).status).toBe(200);
+    expect(await getAuthContext(lama)).toBeNull();
+    expect(await login(email, "password-baru-1")).not.toBeNull();
+
+    const self = await db.query<{ id: number }>("SELECT id FROM users WHERE email = ?").get(ADMIN_EMAIL);
+    const adminLain = (await login(ADMIN_EMAIL, PASSWORD))!.token;
+    const selfPayload = { nama: "Admin Uji", email: ADMIN_EMAIL, password: PASSWORD, roles: ["admin"], atasanId: null, supervisiId: null };
+    expect((await handleUpdateUser(req("PUT", `/api/users/${self!.id}`, adminToken, selfPayload), self!.id)).status).toBe(200);
+    expect(await getAuthContext(adminToken)).not.toBeNull();
+    expect(await getAuthContext(adminLain)).toBeNull();
   });
 });
