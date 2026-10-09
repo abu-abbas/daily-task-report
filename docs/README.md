@@ -74,6 +74,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | 0046 | [Skema fisik untuk laporan bulanan PDF lengkap — digantikan ADR-0019](adr/0046-skema-fisik-laporan-template.md) |
 | 0047 | [Realisasi terisi dari commit GitLab lewat token personal](adr/0047-realisasi-dari-commit-gitlab.md) |
 | 0048 | [Logging aplikasi — file harian, rotasi ukuran, retensi mingguan](adr/0048-logging-aplikasi.md) |
+| 0049 | [Hono, Drizzle, dan PostgreSQL secara bertahap (usulan)](adr/0049-hono-drizzle-postgres.md) |
 
 ## Tahapan pekerjaan
 
