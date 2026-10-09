@@ -1,5 +1,5 @@
 import { and, gte, lte } from "drizzle-orm";
-import { db } from "./db";
+import { db, first } from "./db";
 import { holidays } from "./schema";
 
 // Timezone bisnis (ADR-0032), sama dengan TZ di server/.env — dipakai eksplisit di sini
@@ -38,7 +38,7 @@ async function isHoliday(tanggal: string): Promise<boolean> {
     .from(holidays)
     .where(and(lte(holidays.tanggal_mulai, tanggal), gte(holidays.tanggal_akhir, tanggal)))
     .limit(1)
-    .get();
+    .then(first);
   return row !== undefined;
 }
 

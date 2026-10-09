@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db } from "./db";
+import { db, first } from "./db";
 import { sessions, userRoles, users } from "./schema";
 import type { AuthContext, Role } from "./types";
 
@@ -20,7 +20,7 @@ export async function login(
   email: string,
   password: string,
 ): Promise<{ token: string; expiresAt: Date } | null> {
-  const user = await db.select().from(users).where(eq(users.email, email)).get();
+  const user = await db.select().from(users).where(eq(users.email, email)).then(first);
 
   // Selalu jalankan verify walau user/password_hash kosong supaya waktu respons
   // tidak membocorkan apakah email terdaftar (mitigasi timing/enumeration).
@@ -34,7 +34,7 @@ export async function login(
   await db.insert(sessions).values({
     token_hash: hashToken(token),
     user_id: user.id,
-    expires_at: expiresAt.toISOString(),
+    expires_at: expiresAt,
   });
 
   return { token, expiresAt };
@@ -52,10 +52,10 @@ export async function getAuthContext(token: string | undefined): Promise<AuthCon
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.user_id))
     .where(eq(sessions.token_hash, hashToken(token)))
-    .get();
+    .then(first);
 
   if (!row) return null;
-  if (new Date(row.expires_at).getTime() < Date.now()) {
+  if (row.expires_at.getTime() < Date.now()) {
     await db.delete(sessions).where(eq(sessions.token_hash, hashToken(token)));
     return null;
   }

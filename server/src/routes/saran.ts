@@ -1,7 +1,7 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "../db";
+import { db, first } from "../db";
 import { saranBulanan } from "../schema";
 import { errorResponse, json } from "../http";
 
@@ -54,7 +54,7 @@ async function getSaranIsi(userId: number, bulan: string): Promise<string> {
     .select({ isi: saranBulanan.isi })
     .from(saranBulanan)
     .where(and(eq(saranBulanan.user_id, userId), eq(saranBulanan.bulan, bulan)))
-    .get();
+    .then(first);
   return row?.isi ?? "";
 }
 

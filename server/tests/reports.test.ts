@@ -1,13 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { PDFDocument } from "pdf-lib";
 import PizZip from "pizzip";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { isWorkday } = await import("../src/kalender");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
@@ -79,23 +75,23 @@ function reqUploadTemplate(token: string, file: File): Request {
 }
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   TANGGAL_KOSONG_HARAPAN = await cariWorkday(1, 15, [5, 10]);
   TANGGAL_MASA_DEPAN = await cariWorkday(16, 31, []);
   const hash = await Bun.password.hash(PASSWORD);
 
-  const tenagaResult = db
+  const tenagaResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Reports", TENAGA_EMAIL, hash);
   tenagaId = Number(tenagaResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Reports",
     "admin.reports@example.test",
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     "admin.reports@example.test",
   );
   const adminToken = (await login("admin.reports@example.test", PASSWORD))!.token;
@@ -129,18 +125,18 @@ beforeAll(async () => {
   );
   taskId = ((await taskRes.json()) as { task: { id: number } }).task.id;
 
-  db.query("INSERT INTO saran_bulanan (user_id, bulan, isi) VALUES (?, ?, '1) Terapkan CI/CD')").run(tenagaId, BULAN);
+  await db.query("INSERT INTO saran_bulanan (user_id, bulan, isi) VALUES (?, ?, '1) Terapkan CI/CD')").run(tenagaId, BULAN);
 
-  db.query(
+  await db.query(
     "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', '- Poin satu\n- Poin dua')",
   ).run(taskId, tenagaId, `${BULAN}-05`);
-  const logId = db
+  const logId = await db
     .query("SELECT id FROM task_logs WHERE task_id = ? AND tanggal = ?")
     .get(taskId, `${BULAN}-05`) as { id: number };
-  db.query(
+  await db.query(
     "INSERT INTO attachments (attachable_type, attachable_id, file_path, file_type, nama_asli, ukuran_bytes, uploaded_by) VALUES ('task_log', ?, 'attachments/tidak-ada.jpg', 'image/jpeg', 'bukti.jpg', 100, ?)",
   ).run(logId.id, tenagaId);
-  db.query("INSERT INTO leaves (user_id, tanggal, jenis) VALUES (?, ?, 'sakit')").run(tenagaId, `${BULAN}-10`);
+  await db.query("INSERT INTO leaves (user_id, tanggal, jenis) VALUES (?, ?, 'sakit')").run(tenagaId, `${BULAN}-10`);
 });
 
 describe("GET /api/reports/monthly", () => {
@@ -176,11 +172,11 @@ describe("GET /api/reports/monthly", () => {
   });
 
   test("isolasi antar user — laporan cuma berisi data milik sendiri (tidak error walau user lain punya data)", async () => {
-    const lainResult = db
+    const lainResult = await db
       .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
       .run("User Lain Reports", "lain.reports@example.test", "x");
     const lainId = Number(lainResult.lastInsertRowid);
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', 'Punya orang lain')",
     ).run(taskId, lainId, `${BULAN}-06`);
 

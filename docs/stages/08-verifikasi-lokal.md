@@ -9,12 +9,12 @@
 - Jalankan pemeriksaan integrasi login → input → edit/izin → riwayat → dashboard → ekspor.
 - Periksa batas bulan, kalender kerja, otorisasi API/file, dan rollback transaksi yang relevan.
 - Periksa mobile/laptop, light/dark mode, label, focus keyboard, serta feedback validasi.
-- Dokumentasikan setup, menjalankan aplikasi, konfigurasi minimum, dan backup/restore SQLite beserta attachment.
+- Dokumentasikan setup, menjalankan aplikasi, konfigurasi minimum, dan backup/restore PostgreSQL (`pg_dump`/`pg_restore`, [ADR-0049](../adr/0049-hono-drizzle-postgres.md)) beserta attachment.
 
 ## Kriteria selesai dan pemeriksaan
 
 - [ ] Pemeriksaan bermakna untuk alur bisnis utama dan typecheck lolos; keterbatasan yang masih ada dicatat.
-- [ ] Data SQLite dan attachment dapat dipulihkan bersama dari backup dan dibaca kembali.
+- [ ] Data PostgreSQL dan attachment dapat dipulihkan bersama dari backup dan dibaca kembali.
 - [ ] Instruksi lokal dapat diikuti dari setup baru.
 - [ ] Tidak menyatakan seluruh aplikasi selesai bila template atau fitur wajib lain masih menunggu input.
 

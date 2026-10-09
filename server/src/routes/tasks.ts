@@ -1,8 +1,8 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { and, asc, eq, notExists, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/sqlite-core";
-import { db } from "../db";
+import { alias } from "drizzle-orm/pg-core";
+import { db, first } from "../db";
 import { taskLogs, tasks } from "../schema";
 import { errorResponse, json } from "../http";
 import { isActiveProjectMember } from "./projects";
@@ -37,7 +37,7 @@ function publicTask(row: TaskRow) {
 }
 
 async function getTask(taskId: number): Promise<TaskRow | undefined> {
-  return db.select(taskColumns).from(tasks).where(eq(tasks.id, taskId)).get();
+  return db.select(taskColumns).from(tasks).where(eq(tasks.id, taskId)).then(first);
 }
 
 // Task tidak punya pemilik tetap (ADR-0010); dibaca-tulis siapa pun anggota aktif project-nya
@@ -114,15 +114,14 @@ export async function handleCloseTask(req: Request, taskId: number): Promise<Res
 
   const deskripsiPenutupan = parsed.data.deskripsiPenutupan?.trim() || null;
 
-  // Callback transaksi sinkron (.all/.run), lihat catatan di routes/users.ts.
-  db.transaction((tx) => {
-    tx.update(tasks).set({ status: "closed", deskripsi_penutupan: deskripsiPenutupan }).where(eq(tasks.id, taskId)).run();
+  await db.transaction(async (tx) => {
+    await tx.update(tasks).set({ status: "closed", deskripsi_penutupan: deskripsiPenutupan }).where(eq(tasks.id, taskId));
 
     // ADR-0009: catatan hasil realisasi wajib diisi. Prioritas: deskripsi penutupan yang baru
     // diisi > catatan rencana yang sudah ada duluan (jangan sampai checklist/notes yang sudah
     // ditulis tertimpa jadi generik) > fallback generik kalau memang keduanya kosong.
     const realisasi = alias(taskLogs, "r");
-    const belumRealisasi = tx
+    const belumRealisasi = await tx
       .select({ userId: taskLogs.user_id, tanggal: taskLogs.tanggal, rencanaCatatan: taskLogs.catatan })
       .from(taskLogs)
       .where(
@@ -143,14 +142,13 @@ export async function handleCloseTask(req: Request, taskId: number): Promise<Res
               ),
           ),
         ),
-      )
-      .all();
+      );
 
     for (const row of belumRealisasi) {
       const catatan = deskripsiPenutupan ?? row.rencanaCatatan ?? "Task ditutup.";
-      tx.insert(taskLogs)
-        .values({ task_id: taskId, user_id: row.userId, tanggal: row.tanggal, jenis: "realisasi", catatan, is_extra: 0 })
-        .run();
+      await tx
+        .insert(taskLogs)
+        .values({ task_id: taskId, user_id: row.userId, tanggal: row.tanggal, jenis: "realisasi", catatan, is_extra: 0 });
     }
   });
 

@@ -1,11 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { storageDir } = await import("../src/db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
@@ -57,30 +55,30 @@ function reqUpload(token: string | undefined, taskLogId: number, file: File): Re
 }
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
 
-  const tenagaResult = db
+  const tenagaResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Attachments", TENAGA_EMAIL, hash);
   tenagaId = Number(tenagaResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Luar Attachments",
     LUAR_EMAIL,
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'tenaga_ahli' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'tenaga_ahli' FROM users WHERE email = ?").run(
     LUAR_EMAIL,
   );
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Attachments",
     "admin.attachments@example.test",
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     "admin.attachments@example.test",
   );
   const adminToken = (await login("admin.attachments@example.test", PASSWORD))!.token;
@@ -103,14 +101,14 @@ beforeAll(async () => {
   );
   taskId = ((await taskRes.json()) as { task: { id: number } }).task.id;
 
-  const realisasiResult = db
+  const realisasiResult = await db
     .query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2026-09-07', 'realisasi', 'Sudah dikerjakan')",
     )
     .run(taskId, tenagaId);
   realisasiLogId = Number(realisasiResult.lastInsertRowid);
 
-  const rencanaResult = db
+  const rencanaResult = await db
     .query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-08', 'rencana')")
     .run(taskId, tenagaId);
   rencanaLogId = Number(rencanaResult.lastInsertRowid);
@@ -163,7 +161,7 @@ describe("POST /api/attachments", () => {
     expect(body.attachment.namaAsli).toBe("bukti.jpg");
     expect(body.attachment.fileType).toBe("image/jpeg");
 
-    const row = db.query("SELECT file_path FROM attachments WHERE id = ?").get(body.attachment.id) as {
+    const row = await db.query("SELECT file_path FROM attachments WHERE id = ?").get(body.attachment.id) as {
       file_path: string;
     };
     expect(row.file_path).toStartWith("attachments/2026/09/07/");
@@ -197,18 +195,18 @@ describe("DELETE /api/attachments/:id dan GET /api/attachments/:id/file", () => 
 
   beforeAll(async () => {
     const file = new File([JPEG_BYTES], "untuk-dihapus.jpg", { type: "image/jpeg" });
-    const res = await handleUploadAttachment(reqUpload(tenagaToken, rencanaLogIdRealisasiBaru(), file));
+    const res = await handleUploadAttachment(reqUpload(tenagaToken, await rencanaLogIdRealisasiBaru(), file));
     const body = (await res.json()) as { attachment: { id: number } };
     attachmentId = body.attachment.id;
-    const row = db.query("SELECT file_path FROM attachments WHERE id = ?").get(attachmentId) as {
+    const row = await db.query("SELECT file_path FROM attachments WHERE id = ?").get(attachmentId) as {
       file_path: string;
     };
     filePath = row.file_path;
   });
 
   // Butuh task_log realisasi baru (bukan realisasiLogId yang sudah penuh 5 lampiran).
-  function rencanaLogIdRealisasiBaru(): number {
-    const result = db
+  async function rencanaLogIdRealisasiBaru(): Promise<number> {
+    const result = await db
       .query(
         "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2026-09-06', 'realisasi', 'Log lain')",
       )
@@ -252,7 +250,7 @@ describe("DELETE /api/attachments/:id dan GET /api/attachments/:id/file", () => 
       attachmentId,
     );
     expect(res.status).toBe(204);
-    const row = db.query("SELECT id FROM attachments WHERE id = ?").get(attachmentId);
+    const row = await db.query("SELECT id FROM attachments WHERE id = ?").get(attachmentId);
     expect(row).toBeNull();
     expect(existsSync(join(storageDir, filePath))).toBe(false);
   });
@@ -271,12 +269,12 @@ describe("Efek uncheck checklist ikut membersihkan attachment (bukan FK sungguha
     // Rencana kemarin (tanggal khusus, belum dipakai test lain di file ini).
     const tanggalRencana = "2026-09-10";
     const tanggalLaporan = "2026-09-11"; // previousWorkday-nya = tanggalRencana (asumsi hari kerja)
-    db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, ?, 'rencana')").run(
+    await db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, ?, 'rencana')").run(
       taskId,
       tenagaId,
       tanggalRencana,
     );
-    const realisasiBaru = db
+    const realisasiBaru = await db
       .query(
         "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, ?, 'realisasi', 'Ada isinya')",
       )
@@ -287,7 +285,7 @@ describe("Efek uncheck checklist ikut membersihkan attachment (bukan FK sungguha
     const uploadRes = await handleUploadAttachment(reqUpload(tenagaToken, taskLogIdBaru, file));
     expect(uploadRes.status).toBe(201);
     const uploadBody = (await uploadRes.json()) as { attachment: { id: number } };
-    const attachmentRow = db
+    const attachmentRow = await db
       .query("SELECT file_path FROM attachments WHERE id = ?")
       .get(uploadBody.attachment.id) as { file_path: string };
 
@@ -301,7 +299,7 @@ describe("Efek uncheck checklist ikut membersihkan attachment (bukan FK sungguha
     );
     expect(saveRes.status).toBe(200);
 
-    const remainingAttachment = db.query("SELECT id FROM attachments WHERE id = ?").get(uploadBody.attachment.id);
+    const remainingAttachment = await db.query("SELECT id FROM attachments WHERE id = ?").get(uploadBody.attachment.id);
     expect(remainingAttachment).toBeNull();
     expect(existsSync(join(storageDir, attachmentRow.file_path))).toBe(false);
   });

@@ -1,4 +1,5 @@
-import { runMigrations } from "./db";
+import { client, runMigrations } from "./db";
 
-runMigrations();
+await runMigrations();
 console.log("[migrate] selesai");
+await client.close();

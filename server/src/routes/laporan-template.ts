@@ -1,6 +1,6 @@
 import { requireLogin } from "../authz";
 import { eq, sql } from "drizzle-orm";
-import { db } from "../db";
+import { db, first } from "../db";
 import { laporanTemplate } from "../schema";
 import { errorResponse, json } from "../http";
 import {
@@ -20,7 +20,7 @@ interface LaporanTemplateRow {
 }
 
 async function getRow(userId: number): Promise<LaporanTemplateRow | undefined> {
-  return db.select().from(laporanTemplate).where(eq(laporanTemplate.user_id, userId)).get();
+  return db.select().from(laporanTemplate).where(eq(laporanTemplate.user_id, userId)).then(first);
 }
 
 function publicRow(row: LaporanTemplateRow) {

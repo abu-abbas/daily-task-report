@@ -1,12 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-// Lihat users.test.ts soal kenapa DATABASE_PATH dipaksa timpa sebelum import.
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { app } = await import("../src/app");
 const { logDir } = await import("../src/logger");
@@ -20,16 +17,16 @@ let adminToken: string;
 let tenagaToken: string;
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
   for (const [nama, email, role] of [
     ["Admin App", ADMIN_EMAIL, "admin"],
     ["Tenaga App", TENAGA_EMAIL, "tenaga_ahli"],
   ] as const) {
     const id = Number(
-      db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(nama, email, hash).lastInsertRowid,
+      (await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(nama, email, hash)).lastInsertRowid,
     );
-    db.query("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run(id, role);
+    await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run(id, role);
   }
   adminToken = (await login(ADMIN_EMAIL, PASSWORD))!.token;
   tenagaToken = (await login(TENAGA_EMAIL, PASSWORD))!.token;

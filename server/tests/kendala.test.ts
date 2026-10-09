@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleCreateTask } = await import("../src/routes/tasks");
@@ -35,26 +31,26 @@ function req(method: string, path: string, token?: string, body?: unknown): Requ
 }
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
 
-  const tenagaResult = db
+  const tenagaResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Kendala", TENAGA_EMAIL, hash);
   tenagaId = Number(tenagaResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run("Luar Kendala", LUAR_EMAIL, hash);
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'tenaga_ahli' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run("Luar Kendala", LUAR_EMAIL, hash);
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'tenaga_ahli' FROM users WHERE email = ?").run(
     LUAR_EMAIL,
   );
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Kendala",
     "admin.kendala@example.test",
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     "admin.kendala@example.test",
   );
   const adminToken = (await login("admin.kendala@example.test", PASSWORD))!.token;
@@ -72,12 +68,12 @@ beforeAll(async () => {
   const taskRes = await handleCreateTask(req("POST", "/api/tasks", tenagaToken, { projectId, deskripsi: "Task Kendala" }));
   taskId = ((await taskRes.json()) as { task: { id: number } }).task.id;
 
-  const realisasiResult = db
+  const realisasiResult = await db
     .query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2026-09-07', 'realisasi', 'Sudah dikerjakan')")
     .run(taskId, tenagaId);
   realisasiLogId = Number(realisasiResult.lastInsertRowid);
 
-  const rencanaResult = db
+  const rencanaResult = await db
     .query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-08', 'rencana')")
     .run(taskId, tenagaId);
   rencanaLogId = Number(rencanaResult.lastInsertRowid);
@@ -163,7 +159,7 @@ describe("POST /api/bottlenecks/:id/resolve dan DELETE /api/bottlenecks/:id", ()
   test("delete berhasil (204) dan hilang dari tabel", async () => {
     const res = await handleDeleteKendala(req("DELETE", `/api/bottlenecks/${kendalaId}`, tenagaToken), kendalaId);
     expect(res.status).toBe(204);
-    const row = db.query("SELECT id FROM kendala WHERE id = ?").get(kendalaId);
+    const row = await db.query("SELECT id FROM kendala WHERE id = ?").get(kendalaId);
     expect(row).toBeNull();
   });
 

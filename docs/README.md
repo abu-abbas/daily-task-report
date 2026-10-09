@@ -18,7 +18,7 @@ Referensi pengguna: [spec awal](references/spec-original.md), [tampilan input ha
 
 ## Ringkasan yang dikunci
 
-Bun + Vue 3 + Vite + TypeScript, SQLite, login email/password, akun dengan rangkap peran tenaga ahli/supervisi/atasan/admin, shadcn-vue + Tailwind, tampilan minimalis mobile-first, light/dark mode, dan operasi lokal dahulu. Hierarki atasan → supervisi → tenaga ahli menentukan akses histori melalui hubungan aktif. Tanggal bisnis memakai Asia/Jakarta. Task tanpa pemilik permanen; realisasi bertanggal pekerjaan. Penutupan eksplisit memiliki deskripsi opsional. Kalender kerja tahunan menentukan hari kerja sebelumnya dan indikator nyangkut. Word memakai template berbeda per tipe programmer; file template menyusul.
+Bun + Vue 3 + Vite + TypeScript, PostgreSQL (awalnya SQLite, lihat ADR-0049), login email/password, akun dengan rangkap peran tenaga ahli/supervisi/atasan/admin, shadcn-vue + Tailwind, tampilan minimalis mobile-first, light/dark mode, dan operasi lokal dahulu. Hierarki atasan → supervisi → tenaga ahli menentukan akses histori melalui hubungan aktif. Tanggal bisnis memakai Asia/Jakarta. Task tanpa pemilik permanen; realisasi bertanggal pekerjaan. Penutupan eksplisit memiliki deskripsi opsional. Kalender kerja tahunan menentukan hari kerja sebelumnya dan indikator nyangkut. Word memakai template berbeda per tipe programmer; file template menyusul.
 
 ## Indeks keputusan
 
@@ -27,7 +27,7 @@ ADR-0001–0020 mengikuti nomor keputusan bisnis. ADR-0021–0024 mengikuti empa
 | ADR | Keputusan |
 | --- | --- |
 | 0001 | [Stack aplikasi TypeScript](adr/0001-stack-typescript.md) |
-| 0002 | [SQLite untuk tahap awal](adr/0002-database-sqlite.md) |
+| 0002 | [SQLite untuk tahap awal](adr/0002-database-sqlite.md) (digantikan ADR-0049) |
 | 0003 | [Login email dan password](adr/0003-login-session.md) |
 | 0004 | [Peran dan cakupan akses](adr/0004-hak-akses.md) |
 | 0005 | [Pengelolaan project oleh admin](adr/0005-project-keanggotaan.md) |

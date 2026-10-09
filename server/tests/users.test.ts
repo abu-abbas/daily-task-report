@@ -1,17 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-// DATABASE_PATH harus di-set sebelum src/db di-import (module top-level membaca env sekali).
-// Paksa timpa (bukan ??=): kalau server/.env kebetulan sudah men-set DATABASE_PATH, biarpun
-// itu dimuat otomatis oleh Bun sebelum baris ini jalan, test tetap wajib pakai db temp sendiri
-// — bukan diam-diam jatuh ke db development beneran.
-// "../src/db" adalah singleton ESM yang dibagi lintas file test dalam satu proses "bun test",
-// jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini.
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { handleListUsers, handleCreateUser, handleUpdateUser } = await import("../src/routes/users");
 
@@ -26,29 +16,29 @@ let adminToken: string;
 let tenagaToken: string;
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Uji",
     ADMIN_EMAIL,
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     ADMIN_EMAIL,
   );
 
-  const atasanResult = db
+  const atasanResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Atasan Uji", ATASAN_EMAIL, hash);
   atasanId = Number(atasanResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'atasan')").run(atasanId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'atasan')").run(atasanId);
 
-  const tenagaResult = db
+  const tenagaResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Uji", TENAGA_EMAIL, hash);
   tenagaId = Number(tenagaResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
 
   adminToken = (await login(ADMIN_EMAIL, PASSWORD))!.token;
   tenagaToken = (await login(TENAGA_EMAIL, PASSWORD))!.token;

@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import { asc, and, eq } from "drizzle-orm";
-import { db, isUniqueViolation } from "../db";
+import { db, isUniqueViolation, first } from "../db";
 import { userRoles, users } from "../schema";
 import { errorResponse, json } from "../http";
 import { requireAdmin } from "../authz";
@@ -45,7 +45,7 @@ const userColumns = {
 };
 
 async function getUserRow(id: number): Promise<UserRow | undefined> {
-  return (await db.select(userColumns).from(users).where(eq(users.id, id)).get()) as UserRow | undefined;
+  return (await db.select(userColumns).from(users).where(eq(users.id, id)).then(first)) as UserRow | undefined;
 }
 
 async function hasRole(userId: number, role: Role): Promise<boolean> {
@@ -53,7 +53,7 @@ async function hasRole(userId: number, role: Role): Promise<boolean> {
     .select({ role: userRoles.role })
     .from(userRoles)
     .where(and(eq(userRoles.user_id, userId), eq(userRoles.role, role)))
-    .get();
+    .then(first);
   return row !== undefined;
 }
 
@@ -106,11 +106,8 @@ export async function handleCreateUser(req: Request): Promise<Response> {
 
   let userId: number;
   try {
-    // Callback transaksi sengaja sinkron (.run/.get): transaksi driver bun:sqlite tidak boleh
-    // diselingi await, kalau tidak query sesudah await jatuh di luar transaksi. Diubah ke async
-    // saat pindah driver Postgres di tahap 3 (ADR-0049).
-    userId = db.transaction((tx) => {
-      const { id } = tx
+    userId = await db.transaction(async (tx) => {
+      const [{ id }] = await tx
         .insert(users)
         .values({
           nama: parsed.data.nama,
@@ -119,11 +116,8 @@ export async function handleCreateUser(req: Request): Promise<Response> {
           atasan_id: parsed.data.atasanId,
           supervisi_id: parsed.data.supervisiId,
         })
-        .returning({ id: users.id })
-        .get();
-      tx.insert(userRoles)
-        .values(parsed.data.roles.map((role) => ({ user_id: id, role })))
-        .run();
+        .returning({ id: users.id });
+      await tx.insert(userRoles).values(parsed.data.roles.map((role) => ({ user_id: id, role })));
       return id;
     });
   } catch (err) {
@@ -152,9 +146,9 @@ export async function handleUpdateUser(req: Request, id: number): Promise<Respon
   const passwordHash = parsed.data.password ? await Bun.password.hash(parsed.data.password) : null;
 
   try {
-    // Callback transaksi sinkron, lihat catatan di handleCreateUser.
-    db.transaction((tx) => {
-      tx.update(users)
+    await db.transaction(async (tx) => {
+      await tx
+        .update(users)
         .set({
           nama: parsed.data.nama,
           email: parsed.data.email,
@@ -162,12 +156,9 @@ export async function handleUpdateUser(req: Request, id: number): Promise<Respon
           supervisi_id: parsed.data.supervisiId,
           ...(passwordHash ? { password_hash: passwordHash } : {}),
         })
-        .where(eq(users.id, id))
-        .run();
-      tx.delete(userRoles).where(eq(userRoles.user_id, id)).run();
-      tx.insert(userRoles)
-        .values(parsed.data.roles.map((role) => ({ user_id: id, role })))
-        .run();
+        .where(eq(users.id, id));
+      await tx.delete(userRoles).where(eq(userRoles.user_id, id));
+      await tx.insert(userRoles).values(parsed.data.roles.map((role) => ({ user_id: id, role })));
     });
   } catch (err) {
     if (isUniqueViolation(err)) return errorResponse(409, "Email sudah dipakai.");

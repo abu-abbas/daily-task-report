@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
-import { db, type Tx } from "../db";
+import { db, type Tx, first } from "../db";
 import { projects, tasks, userProject, users } from "../schema";
 import { errorResponse, json } from "../http";
 import { requireAdmin, requireLogin } from "../authz";
@@ -44,7 +44,7 @@ const projectColumns = {
 };
 
 async function getProjectRow(id: number): Promise<ProjectRow | undefined> {
-  return db.select(projectColumns).from(projects).where(eq(projects.id, id)).get();
+  return db.select(projectColumns).from(projects).where(eq(projects.id, id)).then(first);
 }
 
 async function getMembership(userId: number, projectId: number): Promise<{ ended_at: string | null } | undefined> {
@@ -52,24 +52,18 @@ async function getMembership(userId: number, projectId: number): Promise<{ ended
     .select({ ended_at: userProject.ended_at })
     .from(userProject)
     .where(and(eq(userProject.user_id, userId), eq(userProject.project_id, projectId)))
-    .get();
+    .then(first);
 }
 
 // Dipakai handleAddMember (admin) dan handleMergeProject (ADR-0042, memindahkan anggota
 // project usulan ke project tujuan) — satu sumber logika "aktifkan lagi baris lama, jangan
-// menggandakan" (ADR-0034). Selalu dipanggil di dalam transaksi (callback sinkron, lihat
-// catatan di routes/users.ts) supaya cek-lalu-tulis tidak diselingi request lain.
-function activateMembership(tx: Tx, userId: number, projectId: number): void {
-  const where = and(eq(userProject.user_id, userId), eq(userProject.project_id, projectId));
-  const existing = tx.select({ ended_at: userProject.ended_at }).from(userProject).where(where).get();
-
-  if (existing) {
-    if (existing.ended_at !== null) {
-      tx.update(userProject).set({ ended_at: null }).where(where).run();
-    }
-  } else {
-    tx.insert(userProject).values({ user_id: userId, project_id: projectId, ended_at: null }).run();
-  }
+// menggandakan" (ADR-0034). Satu upsert atomik di primary key (user_id, project_id), jadi dua
+// request bersamaan tidak bisa sama-sama lolos cek lalu menulis ganda.
+async function activateMembership(tx: Tx | typeof db, userId: number, projectId: number): Promise<void> {
+  await tx
+    .insert(userProject)
+    .values({ user_id: userId, project_id: projectId, ended_at: null })
+    .onConflictDoUpdate({ target: [userProject.user_id, userProject.project_id], set: { ended_at: null } });
 }
 
 // Aturan inti ADR-0005: tenaga ahli hanya boleh bertindak (mencatat pekerjaan, dst.) pada
@@ -82,7 +76,7 @@ export async function isActiveProjectMember(userId: number, projectId: number): 
     .select({ user_id: userProject.user_id })
     .from(userProject)
     .where(and(eq(userProject.user_id, userId), eq(userProject.project_id, projectId), isNull(userProject.ended_at)))
-    .get();
+    .then(first);
   return row !== undefined;
 }
 
@@ -166,10 +160,10 @@ export async function handleMergeProject(req: Request, id: number): Promise<Resp
 
   const members = await getActiveMembers(id);
 
-  db.transaction((tx) => {
-    tx.update(tasks).set({ project_id: target.id }).where(eq(tasks.project_id, id)).run();
-    for (const member of members) activateMembership(tx, member.id, target.id);
-    tx.delete(projects).where(eq(projects.id, id)).run();
+  await db.transaction(async (tx) => {
+    await tx.update(tasks).set({ project_id: target.id }).where(eq(tasks.project_id, id));
+    for (const member of members) await activateMembership(tx, member.id, target.id);
+    await tx.delete(projects).where(eq(projects.id, id));
   });
 
   return json({ project: await publicProject((await getProjectRow(target.id))!) });
@@ -222,7 +216,7 @@ export async function handleAddMember(req: Request, projectId: number): Promise<
   const parsed = memberPayloadSchema.safeParse(body);
   if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Data tidak valid.");
 
-  const user = await db.select({ id: users.id }).from(users).where(eq(users.id, parsed.data.userId)).get();
+  const user = await db.select({ id: users.id }).from(users).where(eq(users.id, parsed.data.userId)).then(first);
   if (!user) return errorResponse(404, "User tidak ditemukan.");
 
   const existing = await getMembership(parsed.data.userId, projectId);
@@ -231,7 +225,7 @@ export async function handleAddMember(req: Request, projectId: number): Promise<
     return errorResponse(409, "User sudah menjadi anggota project ini.");
   }
 
-  db.transaction((tx) => activateMembership(tx, parsed.data.userId, projectId));
+  await activateMembership(db, parsed.data.userId, projectId);
 
   return json({ project: await publicProject((await getProjectRow(projectId))!) }, { status: 201 });
 }

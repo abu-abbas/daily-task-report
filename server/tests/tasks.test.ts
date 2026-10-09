@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const { handleCreateProject, handleAddMember } = await import("../src/routes/projects");
 const { handleListTasks, handleCreateTask, handleCloseTask } = await import("../src/routes/tasks");
@@ -31,33 +27,33 @@ function req(method: string, path: string, token?: string, body?: unknown): Requ
 }
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
 
-  const tenagaResult = db
+  const tenagaResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Tasks", TENAGA_EMAIL, hash);
   tenagaId = Number(tenagaResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Luar Tasks",
     LUAR_EMAIL,
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'tenaga_ahli' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'tenaga_ahli' FROM users WHERE email = ?").run(
     LUAR_EMAIL,
   );
 
   // Admin sementara cuma untuk membuat project — dibuat lewat query langsung supaya tidak
   // ikut jadi anggota (fokus test ini ke tasks, bukan otorisasi admin).
   const adminHash = await Bun.password.hash(PASSWORD);
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Tasks",
     "admin.tasks@example.test",
     adminHash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     "admin.tasks@example.test",
   );
   const adminToken = (await login("admin.tasks@example.test", PASSWORD))!.token;
@@ -133,16 +129,16 @@ describe("POST /api/tasks/:id/tutup", () => {
     taskId = ((await res.json()) as { task: { id: number } }).task.id;
 
     // Rencana belum direalisasi — harus dikonversi jadi realisasi saat task ditutup.
-    db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-10', 'rencana')").run(
+    await db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-10', 'rencana')").run(
       taskId,
       tenagaId,
     );
     // Rencana yang sudah punya realisasi — catatan lamanya tidak boleh tertimpa.
-    db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-09', 'rencana')").run(
+    await db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-09', 'rencana')").run(
       taskId,
       tenagaId,
     );
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2026-09-09', 'realisasi', 'Beres')",
     ).run(taskId, tenagaId);
   });
@@ -174,17 +170,17 @@ describe("POST /api/tasks/:id/tutup", () => {
 
     // Rencana 2026-09-10 belum punya realisasi sebelumnya — sekarang harus ada, catatannya
     // dari deskripsi penutupan, dan rencananya sendiri tidak dihapus (histori tetap utuh).
-    const rencanaLama = db
+    const rencanaLama = await db
       .query("SELECT id FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-10' AND jenis = 'rencana'")
       .get(taskId);
     expect(rencanaLama).not.toBeNull();
-    const realisasiBaru = db
+    const realisasiBaru = await db
       .query("SELECT catatan FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-10' AND jenis = 'realisasi'")
       .get(taskId) as { catatan: string } | null;
     expect(realisasiBaru?.catatan).toBe("Sudah kelar semua");
 
     // Rencana 2026-09-09 sudah punya realisasi "Beres" — catatan itu tidak boleh tertimpa.
-    const realisasiLama = db
+    const realisasiLama = await db
       .query("SELECT catatan FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-09' AND jenis = 'realisasi'")
       .get(taskId) as { catatan: string };
     expect(realisasiLama.catatan).toBe("Beres");
@@ -207,7 +203,7 @@ describe("POST /api/tasks/:id/tutup", () => {
       req("POST", "/api/tasks", tenagaToken, { projectId, deskripsi: "Task Ditutup Tanpa Deskripsi" }),
     );
     const taskId2 = ((await createRes.json()) as { task: { id: number } }).task.id;
-    db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-11', 'rencana')").run(
+    await db.query("INSERT INTO task_logs (task_id, user_id, tanggal, jenis) VALUES (?, ?, '2026-09-11', 'rencana')").run(
       taskId2,
       tenagaId,
     );
@@ -215,7 +211,7 @@ describe("POST /api/tasks/:id/tutup", () => {
     const res = await handleCloseTask(req("POST", `/api/tasks/${taskId2}/tutup`, tenagaToken, {}), taskId2);
     expect(res.status).toBe(200);
 
-    const realisasi = db
+    const realisasi = await db
       .query("SELECT catatan FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-11' AND jenis = 'realisasi'")
       .get(taskId2) as { catatan: string };
     expect(realisasi.catatan).toBe("Task ditutup.");
@@ -226,14 +222,14 @@ describe("POST /api/tasks/:id/tutup", () => {
       req("POST", "/api/tasks", tenagaToken, { projectId, deskripsi: "Task Ditutup Sudah Ada Catatan" }),
     );
     const taskId3 = ((await createRes.json()) as { task: { id: number } }).task.id;
-    db.query(
+    await db.query(
       "INSERT INTO task_logs (task_id, user_id, tanggal, jenis, catatan) VALUES (?, ?, '2026-09-12', 'rencana', ?)",
     ).run(taskId3, tenagaId, "- [ ] Penambahan Daftar Pengguna\n- [ ] Penambahan Form Tambah Pengguna");
 
     const res = await handleCloseTask(req("POST", `/api/tasks/${taskId3}/tutup`, tenagaToken, {}), taskId3);
     expect(res.status).toBe(200);
 
-    const realisasi = db
+    const realisasi = await db
       .query("SELECT catatan FROM task_logs WHERE task_id = ? AND tanggal = '2026-09-12' AND jenis = 'realisasi'")
       .get(taskId3) as { catatan: string };
     expect(realisasi.catatan).toBe("- [ ] Penambahan Daftar Pengguna\n- [ ] Penambahan Form Tambah Pengguna");

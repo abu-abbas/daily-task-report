@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-
-// Lihat users.test.ts soal kenapa DATABASE_PATH dipaksa timpa sebelum import.
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
 
 const { log, logDir, pruneOldLogs } = await import("../src/logger");
 const { todayJakarta } = await import("../src/kalender");

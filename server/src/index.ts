@@ -2,7 +2,7 @@ import { runMigrations } from "./db";
 import { app } from "./app";
 import { log, pruneOldLogs } from "./logger";
 
-runMigrations();
+await runMigrations();
 // Retensi log dicek sekali saat startup, lalu otomatis tiap pergantian tanggal (ADR-0048).
 pruneOldLogs();
 

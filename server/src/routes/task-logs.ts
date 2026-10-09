@@ -1,7 +1,7 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { db, type Tx } from "../db";
+import { db, type Tx, first } from "../db";
 import { attachments, kendala, leaves, projects, taskLogCommits, taskLogs, tasks, userProject } from "../schema";
 import { errorResponse, json } from "../http";
 import { dalamBulanBerjalan, previousWorkday, realisasiTanggalDiizinkan, todayJakarta } from "../kalender";
@@ -188,7 +188,7 @@ export async function handleGetDailyInput(req: Request, hariIniOverride?: string
     .select({ jenis: leaves.jenis, alasan: leaves.alasan })
     .from(leaves)
     .where(and(eq(leaves.user_id, ctx.user.id), eq(leaves.tanggal, tanggal)))
-    .get();
+    .then(first);
 
   return json({
     tanggal,
@@ -250,12 +250,12 @@ const saveInputSchema = z.object({
 type LogItem = z.infer<typeof logItemSchema>;
 
 async function getTaskProjectId(taskId: number): Promise<number | null> {
-  const row = await db.select({ project_id: tasks.project_id }).from(tasks).where(eq(tasks.id, taskId)).get();
+  const row = await db.select({ project_id: tasks.project_id }).from(tasks).where(eq(tasks.id, taskId)).then(first);
   return row?.project_id ?? null;
 }
 
-// Dipanggil dari dalam transaksi simpan (callback sinkron, lihat catatan di routes/users.ts).
-function upsertTaskLog(
+// Dipanggil dari dalam transaksi simpan.
+async function upsertTaskLog(
   tx: Tx,
   userId: number,
   taskId: number,
@@ -263,10 +263,10 @@ function upsertTaskLog(
   jenis: "rencana" | "realisasi",
   catatan: string | null,
   isExtra: boolean,
-): number {
+): Promise<number> {
   // ADR-0041: satu baris per (user_id, task_id, tanggal, jenis) — submit ulang meng-update,
   // bukan menggandakan.
-  const existing = tx
+  const existing = await tx
     .select({ id: taskLogs.id })
     .from(taskLogs)
     .where(
@@ -277,17 +277,17 @@ function upsertTaskLog(
         eq(taskLogs.jenis, jenis),
       ),
     )
-    .get();
+    .then(first);
 
   if (existing) {
-    tx.update(taskLogs).set({ catatan, is_extra: isExtra ? 1 : 0 }).where(eq(taskLogs.id, existing.id)).run();
+    await tx.update(taskLogs).set({ catatan, is_extra: isExtra ? 1 : 0 }).where(eq(taskLogs.id, existing.id));
     return existing.id;
   }
-  return tx
+  const [inserted] = await tx
     .insert(taskLogs)
     .values({ task_id: taskId, user_id: userId, tanggal, jenis, catatan, is_extra: isExtra ? 1 : 0 })
-    .returning({ id: taskLogs.id })
-    .get().id;
+    .returning({ id: taskLogs.id });
+  return inserted!.id;
 }
 
 // ADR-0030 + ADR-0014: null kalau boleh lanjut, Response kalau harus ditolak.
@@ -304,7 +304,7 @@ async function validasiRealisasiDiizinkan(
     .select({ id: leaves.id })
     .from(leaves)
     .where(and(eq(leaves.user_id, userId), eq(leaves.tanggal, hariKerjaSebelumnya)))
-    .get();
+    .then(first);
   if (izinBentrok) {
     return errorResponse(409, "Tanggal itu sudah tercatat sebagai izin/cuti/sakit, realisasi tidak bisa diisi.");
   }
@@ -373,34 +373,33 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
   // ini tiap item bikin baris projects sendiri-sendiri, jadi N project "Lainnya" duplikat
   // padahal user cuma mau satu.
   const projectBaruCache = new Map<string, number>();
-  function resolveProjectId(tx: Tx, newTask: NonNullable<LogItem["newTask"]>): number {
+  async function resolveProjectId(tx: Tx, newTask: NonNullable<LogItem["newTask"]>): Promise<number> {
     if (newTask.projectId !== undefined) return newTask.projectId;
     const nama = newTask.projectBaru!;
     const cached = projectBaruCache.get(nama);
     if (cached !== undefined) return cached;
-    const projectId = tx
+    const [{ id: projectId }] = await tx
       .insert(projects)
       .values({ nama, is_active: 1, belum_direkonsiliasi: 1 })
-      .returning({ id: projects.id })
-      .get().id;
-    tx.insert(userProject).values({ user_id: ctx.user.id, project_id: projectId, ended_at: null }).run();
+      .returning({ id: projects.id });
+    await tx.insert(userProject).values({ user_id: ctx.user.id, project_id: projectId, ended_at: null });
     projectBaruCache.set(nama, projectId);
     return projectId;
   }
 
-  function saveItem(tx: Tx, item: LogItem) {
+  async function saveItem(tx: Tx, item: LogItem) {
     let taskId = item.taskId;
     if (taskId === undefined && item.newTask) {
-      const projectId = resolveProjectId(tx, item.newTask);
+      const projectId = await resolveProjectId(tx, item.newTask);
       const status = item.newTask.tutupLangsung ? "closed" : "open";
-      taskId = tx
+      const [inserted] = await tx
         .insert(tasks)
         .values({ project_id: projectId, deskripsi: item.newTask.deskripsi, tag: item.newTask.tag ?? null, status })
-        .returning({ id: tasks.id })
-        .get().id;
+        .returning({ id: tasks.id });
+      taskId = inserted!.id;
     }
     const tanggalItem = item.jenis === "realisasi" ? hariKerjaSebelumnya : tanggal;
-    const taskLogId = upsertTaskLog(
+    const taskLogId = await upsertTaskLog(
       tx,
       ctx.user.id,
       taskId!,
@@ -415,7 +414,8 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
     // sama prinsip project "Lainnya"). ON CONFLICT DO NOTHING: UNIQUE(ditambahkan_oleh, commit_sha)
     // jadi jaring pengaman kalau ada race (mis. dua tab) — gagal diam-diam, bukan error simpan.
     if (item.gitlabCommit) {
-      tx.insert(taskLogCommits)
+      await tx
+        .insert(taskLogCommits)
         .values({
           task_log_id: taskLogId,
           commit_sha: item.gitlabCommit.sha,
@@ -424,14 +424,12 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
           authored_at: item.gitlabCommit.authoredAt,
           ditambahkan_oleh: ctx.user.id,
         })
-        .onConflictDoNothing()
-        .run();
+        .onConflictDoNothing();
     }
   }
 
-  // Callback transaksi sinkron (.get/.all/.run), lihat catatan di routes/users.ts.
-  db.transaction((tx) => {
-    for (const item of parsed.data.items) saveItem(tx, item);
+  await db.transaction(async (tx) => {
+    for (const item of parsed.data.items) await saveItem(tx, item);
     if (uncheckedTaskIds.length > 0) {
       const uncheckedWhere = and(
         eq(taskLogs.user_id, ctx.user.id),
@@ -443,12 +441,12 @@ export async function handleSaveDailyInput(req: Request, hariIniOverride?: strin
       // Attachment polymorphic TIDAK auto-cascade seperti kendala (bukan FK sungguhan) — ambil
       // id task_log yang mau dihapus DULU, bersihkan attachment-nya (baris DB + file disk)
       // SEBELUM baris task_logs-nya sendiri dihapus, supaya tidak jadi file/baris yatim.
-      const rowsToDelete = tx.select({ id: taskLogs.id }).from(taskLogs).where(uncheckedWhere).all();
-      deleteAttachmentsByTaskLogIds(
+      const rowsToDelete = await tx.select({ id: taskLogs.id }).from(taskLogs).where(uncheckedWhere);
+      await deleteAttachmentsByTaskLogIds(
         tx,
         rowsToDelete.map((r) => r.id),
       );
-      tx.delete(taskLogs).where(uncheckedWhere).run();
+      await tx.delete(taskLogs).where(uncheckedWhere);
     }
   });
 

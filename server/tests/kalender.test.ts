@@ -1,23 +1,19 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { isWorkday, previousWorkday } = await import("../src/kalender");
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   // 2026-09-07 Senin, 2026-09-08 Selasa: libur tambahan berturutan (di luar akhir pekan).
-  db.query("INSERT INTO holidays (nama, tanggal_mulai, tanggal_akhir) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO holidays (nama, tanggal_mulai, tanggal_akhir) VALUES (?, ?, ?)").run(
     "Uji Libur Beruntun",
     "2026-09-07",
     "2026-09-08",
   );
   // Libur tunggal pas Jumat, dipakai kasus lintas-akhir-pekan.
-  db.query("INSERT INTO holidays (nama, tanggal_mulai, tanggal_akhir) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO holidays (nama, tanggal_mulai, tanggal_akhir) VALUES (?, ?, ?)").run(
     "Uji Libur Jumat",
     "2026-01-02",
     "2026-01-02",

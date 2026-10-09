@@ -1,17 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-// DATABASE_PATH harus di-set sebelum src/db di-import (module top-level membaca env sekali).
-// Paksa timpa (bukan ??=): kalau server/.env kebetulan sudah men-set DATABASE_PATH, biarpun
-// itu dimuat otomatis oleh Bun sebelum baris ini jalan, test tetap wajib pakai db temp sendiri
-// — bukan diam-diam jatuh ke db development beneran.
-// "../src/db" adalah singleton ESM yang dibagi lintas file test dalam satu proses "bun test",
-// jadi db ini juga dipakai file test lain — jangan ditutup/dihapus di sini.
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "laporan-harian-test-")), "test.db");
-
-const { sqlite: db, runMigrations } = await import("../src/db");
+const { runMigrations } = await import("../src/db");
+const { db } = await import("./raw-db");
 const { login } = await import("../src/auth");
 const {
   handleListProjects,
@@ -27,12 +17,12 @@ const {
 
 // Usulan "Lainnya" (ADR-0042) dibuat oleh handleSaveDailyInput (task-logs), bukan endpoint di
 // modul ini — untuk test konfirmasi/gabung di sini, project usulan disiapkan langsung ke DB.
-function createPendingProject(nama: string, memberUserId: number): number {
-  const result = db
+async function createPendingProject(nama: string, memberUserId: number): Promise<number> {
+  const result = await db
     .query("INSERT INTO projects (nama, is_active, belum_direkonsiliasi) VALUES (?, 1, 1)")
     .run(nama);
   const projectId = Number(result.lastInsertRowid);
-  db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
+  await db.query("INSERT INTO user_project (user_id, project_id, ended_at) VALUES (?, ?, NULL)").run(
     memberUserId,
     projectId,
   );
@@ -48,23 +38,23 @@ let adminToken: string;
 let tenagaToken: string;
 
 beforeAll(async () => {
-  runMigrations();
+  await runMigrations();
   const hash = await Bun.password.hash(PASSWORD);
 
-  db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
+  await db.query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)").run(
     "Admin Projects",
     ADMIN_EMAIL,
     hash,
   );
-  db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
+  await db.query("INSERT INTO user_roles (user_id, role) SELECT id, 'admin' FROM users WHERE email = ?").run(
     ADMIN_EMAIL,
   );
 
-  const tenagaResult = db
+  const tenagaResult = await db
     .query("INSERT INTO users (nama, email, password_hash) VALUES (?, ?, ?)")
     .run("Tenaga Projects", TENAGA_EMAIL, hash);
   tenagaId = Number(tenagaResult.lastInsertRowid);
-  db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
+  await db.query("INSERT INTO user_roles (user_id, role) VALUES (?, 'tenaga_ahli')").run(tenagaId);
 
   adminToken = (await login(ADMIN_EMAIL, PASSWORD))!.token;
   tenagaToken = (await login(TENAGA_EMAIL, PASSWORD))!.token;
@@ -173,9 +163,9 @@ describe("Keanggotaan project", () => {
     );
     expect(res.status).toBe(201);
 
-    const rows = db
+    const rows = await db
       .query<{ count: number }, [number, number]>(
-        "SELECT COUNT(*) as count FROM user_project WHERE user_id = ? AND project_id = ?",
+        "SELECT COUNT(*)::int as count FROM user_project WHERE user_id = ? AND project_id = ?",
       )
       .get(tenagaId, projectId);
     expect(rows?.count).toBe(1);
@@ -243,7 +233,7 @@ describe("POST /api/projects/:id/konfirmasi", () => {
   let usulanId: number;
 
   beforeAll(async () => {
-    usulanId = createPendingProject("Usulan Konfirmasi", tenagaId);
+    usulanId = await createPendingProject("Usulan Konfirmasi", tenagaId);
   });
 
   test("ditolak untuk non-admin", async () => {
@@ -274,14 +264,14 @@ describe("POST /api/projects/:id/gabung", () => {
   let targetId: number;
 
   beforeAll(async () => {
-    usulanId = createPendingProject("Usulan Gabung", tenagaId);
+    usulanId = await createPendingProject("Usulan Gabung", tenagaId);
 
     const targetRes = await handleCreateProject(
       req("POST", "/api/projects", adminToken, { nama: "Project Resmi Tujuan", isActive: true }),
     );
     targetId = ((await targetRes.json()) as { project: { id: number } }).project.id;
 
-    db.query("INSERT INTO tasks (project_id, deskripsi) VALUES (?, ?)").run(usulanId, "Task di project usulan");
+    await db.query("INSERT INTO tasks (project_id, deskripsi) VALUES (?, ?)").run(usulanId, "Task di project usulan");
   });
 
   test("ditolak untuk non-admin", async () => {
@@ -307,14 +297,14 @@ describe("POST /api/projects/:id/gabung", () => {
     );
     expect(res.status).toBe(200);
 
-    const task = db
+    const task = await db
       .query<{ project_id: number }, [string]>("SELECT project_id FROM tasks WHERE deskripsi = ?")
       .get("Task di project usulan");
     expect(task?.project_id).toBe(targetId);
 
     expect(await isActiveProjectMember(tenagaId, targetId)).toBe(true);
 
-    const stillExists = db.query<{ id: number }, [number]>("SELECT id FROM projects WHERE id = ?").get(usulanId);
+    const stillExists = await db.query<{ id: number }, [number]>("SELECT id FROM projects WHERE id = ?").get(usulanId);
     expect(stillExists).toBeNull();
   });
 

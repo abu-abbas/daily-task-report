@@ -1,7 +1,7 @@
 import { requireLogin } from "../authz";
 import { z } from "zod/v4";
 import { eq } from "drizzle-orm";
-import { db } from "../db";
+import { db, first } from "../db";
 import { kendala, taskLogs } from "../schema";
 import { errorResponse, json } from "../http";
 
@@ -24,7 +24,7 @@ const kendalaColumns = {
 };
 
 async function getKendala(id: number): Promise<KendalaRow | undefined> {
-  return db.select(kendalaColumns).from(kendala).where(eq(kendala.id, id)).get();
+  return db.select(kendalaColumns).from(kendala).where(eq(kendala.id, id)).then(first);
 }
 
 async function getTaskLog(taskLogId: number): Promise<{ userId: number; jenis: string } | undefined> {
@@ -32,7 +32,7 @@ async function getTaskLog(taskLogId: number): Promise<{ userId: number; jenis: s
     .select({ userId: taskLogs.user_id, jenis: taskLogs.jenis })
     .from(taskLogs)
     .where(eq(taskLogs.id, taskLogId))
-    .get();
+    .then(first);
 }
 
 // Otorisasi kendala = kepemilikan task_log (ADR-0015), bukan keanggotaan project — user yang
@@ -43,7 +43,7 @@ async function getKendalaOwner(kendalaId: number): Promise<number | null> {
     .from(kendala)
     .innerJoin(taskLogs, eq(taskLogs.id, kendala.task_log_id))
     .where(eq(kendala.id, kendalaId))
-    .get();
+    .then(first);
   return row?.userId ?? null;
 }
 

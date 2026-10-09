@@ -10,20 +10,37 @@ Stage 1 (fondasi aplikasi dan akses) selesai; lihat [bukti pelaksanaan](docs/sta
 
 ## Menjalankan aplikasi
 
-Prasyarat: Bun terpasang.
+Prasyarat: Bun terpasang dan PostgreSQL 16+ berjalan ([ADR-0049](docs/adr/0049-hono-drizzle-postgres.md)). Buat role dan database sekali, misalnya:
+
+```sh
+sudo -u postgres psql -c "CREATE ROLE laporan LOGIN PASSWORD 'laporan' CREATEDB;"
+sudo -u postgres createdb -O laporan laporan_harian
+sudo -u postgres createdb -O laporan laporan_harian_test   # dipakai bun test, dikosongkan tiap run
+```
 
 ```sh
 bun install --frozen-lockfile           # sekali di root — workspaces meng-install frontend & server
 
-cp server/.env.example server/.env      # sesuaikan kalau perlu (PORT, DATABASE_PATH, dst.)
+cp server/.env.example server/.env      # sesuaikan kalau perlu (PORT, DATABASE_URL, dst.)
 cp frontend/.env.example frontend/.env  # locale/timezone tampilan (ADR-0032)
 
-bun run migrate                         # jalankan migration ke data/app.db
+bun run migrate                         # jalankan migration ke Postgres (DATABASE_URL)
 bun run dev:server                      # terminal 1 — backend di :3001
 bun run dev:frontend                    # terminal 2 — frontend di :5173, proxy /api ke backend
 ```
 
-Buka `http://localhost:5173`. Login butuh user dengan `password_hash` terisi; belum ada halaman registrasi/seed otomatis, jadi user pertama (admin) dibuat manual langsung ke `data/app.db` (hash password dengan `Bun.password.hash`, lalu insert ke tabel `users`/`user_roles`). Setelah itu, pengelolaan user selanjutnya lewat halaman Kelola User (`/admin/users`).
+Buka `http://localhost:5173`. Login butuh user dengan `password_hash` terisi; belum ada halaman registrasi/seed otomatis, jadi user pertama (admin) dibuat manual langsung ke database Postgres (hash password dengan `Bun.password.hash`, lalu insert ke tabel `users`/`user_roles`). Setelah itu, pengelolaan user selanjutnya lewat halaman Kelola User (`/admin/users`).
+
+### Pindah dari SQLite lama
+
+Data dari versi SQLite (`data/app.db`) disalin sekali ke Postgres yang masih kosong:
+
+```sh
+bun run migrate                              # buat tabel di Postgres
+bun --cwd=server run salin-data              # salin data/app.db → Postgres, cek jumlah baris per tabel
+```
+
+Lokasi file SQLite bisa diganti lewat `SQLITE_PATH`. Attachment dan template Word tetap di `data/`, tidak perlu disalin. Perubahan skema berikutnya: ubah `server/src/schema.ts`, lalu `bun --cwd=server run db:generate` untuk membuat file migration baru di `docs/schema/postgres/`.
 
 ## Setup hook commit
 
